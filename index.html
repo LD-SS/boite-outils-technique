@@ -129,7 +129,15 @@ footer{padding:14px 16px;text-align:center;font-size:12.5px;color:var(--muted)}
 .calc-nav{position:sticky;top:76px;max-height:calc(100vh - 96px);overflow:auto;padding:10px}
 .calc-search{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);color:var(--text);font:inherit;font-size:14px}
 .nav-group-title{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 8px 4px;font-weight:650}
-.nav-item{display:block;padding:7px 10px;border-radius:7px;color:var(--text);text-decoration:none;font-size:14px}
+.nav-item{display:block;padding:6px 10px 6px 30px;border-radius:7px;color:var(--text);text-decoration:none;font-size:14px}
+.nav-sub summary{list-style:none;display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;cursor:pointer;font-weight:600;font-size:14px;user-select:none}
+.nav-sub summary::-webkit-details-marker{display:none}
+.nav-sub summary::before{content:'';width:6px;height:6px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s;margin:0 4px 0 2px}
+.nav-sub[open]>summary::before{transform:rotate(45deg)}
+.nav-sub summary:hover{background:var(--panel2)}
+.nav-sub summary span:first-child{flex:1}
+.nav-count{font-size:11.5px;font-weight:600;color:var(--muted);background:var(--panel2);border:1px solid var(--border);border-radius:99px;padding:0 7px}
+.crumb-sep{color:var(--muted)}
 .nav-item:hover{background:var(--panel2)}
 .nav-item.active{background:var(--accent-weak);color:var(--accent);font-weight:600}
 .nav-toggle{display:none;margin-bottom:10px}
@@ -275,7 +283,7 @@ dialog h2{margin:0 0 14px;font-size:19px}
    ===================================================================== */
 const APP = {
   name: 'Boîte à outils technique',
-  version: '0.1.1 (étape 1)',
+  version: '0.1.2 (étape 1)',
   fileFormat: 'boite-outils-technique',   // identifiant des fichiers projet
   fileVersion: 1                          // version du format JSON (migrations futures)
 };
@@ -620,12 +628,26 @@ const Home = {
    ===================================================================== */
 const Calc = {
   id: 'calc', label: 'Calculs', icon: 'calc',
+  /* Arborescence du menu : domaine > rubrique > calculateurs.
+     Un calculateur indique sa place par cat + sub, et peut apparaître
+     dans d'autres rubriques via also: [[cat, sub], ...]. */
   cats: [
-    {id: 'pneu',   label: 'Pneumatique'},
-    {id: 'hydro',  label: 'Hydraulique'},
-    {id: 'meca',   label: 'Mécanique & transmission'},
-    {id: 'elec',   label: 'Électricité & moteurs'},
-    {id: 'outils', label: 'Outils'}
+    {id: 'pneu',   label: 'Pneumatique', subs: [
+      {id: 'verins', label: 'Vérins'}]},
+    {id: 'hydro',  label: 'Hydraulique', subs: [
+      {id: 'verins', label: 'Vérins'},
+      {id: 'pompes', label: 'Pompes'},
+      {id: 'conduites', label: 'Conduites'}]},
+    {id: 'meca',   label: 'Mécanique', subs: [
+      {id: 'base', label: 'Couple et puissance'},
+      {id: 'trans', label: 'Transmissions'},
+      {id: 'manut', label: 'Levage et manutention'}]},
+    {id: 'elec',   label: 'Électricité', subs: [
+      {id: 'base', label: 'Lois fondamentales'},
+      {id: 'moteurs', label: 'Moteurs'},
+      {id: 'cables', label: 'Câbles et lignes'}]},
+    {id: 'outils', label: 'Outils', subs: [
+      {id: 'conv', label: 'Conversions'}]}
   ],
   defs: [], byId: {},
   cur: null, refs: null,
@@ -648,24 +670,53 @@ const Calc = {
   buildNav(){
     this.nav.append(h('input', {type: 'search', class: 'calc-search', placeholder: 'Rechercher un calcul…',
       'aria-label': 'Rechercher un calcul', oninput: e => this.filterNav(e.target.value)}));
+    const st = Store.state.calc;
+    st.navOpen = st.navOpen || {};
     for (const c of this.cats){
-      const defs = this.defs.filter(d => d.cat === c.id);
-      if (!defs.length) continue;
       const g = h('div', {class: 'nav-group'}, h('div', {class: 'nav-group-title'}, c.label));
-      for (const d of defs)
-        g.append(h('a', {class: 'nav-item', href: '#calc/' + d.id, 'data-id': d.id,
-          'data-s': norm(d.title + ' ' + (d.keywords || '') + ' ' + c.label),
-          onclick: () => this.nav.classList.remove('open')}, d.title));
-      this.nav.append(g);
+      for (const s of c.subs){
+        const items = this.inSub(c.id, s.id);
+        if (!items.length) continue;
+        const key = c.id + '/' + s.id;
+        const det = h('details', {class: 'nav-sub', 'data-key': key},
+          h('summary', {}, h('span', {}, s.label), h('span', {class: 'nav-count'}, items.length)));
+        det.open = st.navOpen[key] !== false;           // rubriques ouvertes par défaut
+        det.addEventListener('toggle', () => { if (!this.searching){ st.navOpen[key] = det.open; Store.saveSoon(); } });
+        for (const d of items)
+          det.append(h('a', {class: 'nav-item', href: '#calc/' + d.id, 'data-id': d.id,
+            'data-s': norm(d.title + ' ' + (d.keywords || '') + ' ' + c.label + ' ' + s.label),
+            onclick: () => this.nav.classList.remove('open')}, d.short || d.title));
+        g.append(det);
+      }
+      if (g.querySelector('.nav-item')) this.nav.append(g);
     }
+  },
+
+  /** Calculateurs rangés dans la rubrique (cat, sub), y compris les renvois « also » */
+  inSub(cat, sub){
+    const own = d => d.cat === cat && d.sub === sub;
+    return this.defs.filter(d => own(d) || (d.also || []).some(([a, b]) => a === cat && b === sub))
+      .sort((x, y) => own(y) - own(x));            // calculateurs propres à la rubrique d'abord
+  },
+  /** Libellés domaine / rubrique d'un calculateur */
+  placeOf(def){
+    const c = this.cats.find(x => x.id === def.cat);
+    const s = c && c.subs.find(x => x.id === def.sub);
+    return [c ? c.label : '', s ? s.label : ''];
   },
 
   filterNav(q){
     q = norm(q.trim());
+    this.searching = !!q;
     this.nav.querySelectorAll('.nav-group').forEach(g => {
-      let any = false;
-      g.querySelectorAll('.nav-item').forEach(a => { const ok = !q || a.dataset.s.includes(q); a.hidden = !ok; any = any || ok; });
-      g.hidden = !any;
+      let anyG = false;
+      g.querySelectorAll('.nav-sub').forEach(det => {
+        let any = false;
+        det.querySelectorAll('.nav-item').forEach(a => { const ok = !q || a.dataset.s.includes(q); a.hidden = !ok; any = any || ok; });
+        det.hidden = !any; anyG = anyG || any;
+        det.open = q ? true : Store.state.calc.navOpen[det.dataset.key] !== false || !!det.querySelector('.nav-item.active');
+      });
+      g.hidden = !anyG;
     });
   },
 
@@ -701,15 +752,18 @@ const Calc = {
     const def = this.byId[id]; if (!def) return;
     this.cur = def; Store.state.calc.last = id;
     this.nav.querySelectorAll('.nav-item').forEach(a => a.classList.toggle('active', a.dataset.id === id));
+    // ouvre la rubrique qui contient le calcul affiché
+    const act = this.nav.querySelector(`.nav-sub[data-key="${def.cat}/${def.sub}"]`);
+    if (act) act.open = true;
     const st = this.getState(def);
-    const cat = this.cats.find(c => c.id === def.cat);
+    const [catLabel, subLabel] = this.placeOf(def);
     const m = this.main; m.innerHTML = '';
     document.title = def.title + ' — ' + APP.name;
 
     m.append(
       h('div', {class: 'print-only'}, APP.name + ' — fiche de calcul — ' + new Date().toLocaleString('fr-BE')),
       h('div', {class: 'calc-head'},
-        h('div', {}, h('div', {class: 'crumb'}, cat ? cat.label : ''), h('h2', {}, def.title), def.desc ? h('p', {class: 'muted', html: def.desc}) : null),
+        h('div', {}, h('div', {class: 'crumb'}, catLabel, subLabel ? h('span', {class: 'crumb-sep'}, ' › ') : null, subLabel), h('h2', {}, def.title), def.desc ? h('p', {class: 'muted', html: def.desc}) : null),
         h('div', {class: 'calc-actions'},
           h('button', {class: 'btn', onclick: () => this.resetCurrent(), title: 'Revenir aux valeurs par défaut', html: ICONS.reset}, h('span', {class: 'lbl'}, 'Réinitialiser')),
           h('button', {class: 'btn', onclick: () => window.print(), title: 'Imprimer / PDF', html: ICONS.print}, h('span', {class: 'lbl'}, 'Imprimer'))))
@@ -910,7 +964,7 @@ function figVerin(se){
 /* =========================== PNEUMATIQUE =========================== */
 
 Calc.register({
-  id: 'pn-force', cat: 'pneu', title: "Force d'un vérin pneumatique",
+  id: 'pn-force', cat: 'pneu', sub: 'verins', short: 'Force du vérin', title: "Force d'un vérin pneumatique",
   keywords: 'verin effort poussee traction piston alesage',
   desc: "Effort développé en sortie (poussée) et en rentrée (traction) à partir de l'alésage et de la pression.",
   inputs: [
@@ -969,7 +1023,7 @@ Calc.register({
 });
 
 Calc.register({
-  id: 'pn-diam', cat: 'pneu', title: "Choix du diamètre d'un vérin",
+  id: 'pn-diam', cat: 'pneu', sub: 'verins', short: 'Choix du diamètre', title: "Choix du diamètre d'un vérin",
   keywords: 'dimensionnement alesage taux de charge iso 15552 6432 normalise',
   desc: "Diamètre minimal puis alésage normalisé pour fournir un effort donné, avec un taux de charge.",
   inputs: [
@@ -1017,7 +1071,7 @@ Calc.register({
 });
 
 Calc.register({
-  id: 'pn-air', cat: 'pneu', title: "Consommation d'air d'un vérin",
+  id: 'pn-air', cat: 'pneu', sub: 'verins', short: 'Consommation d\u2019air', title: "Consommation d'air d'un vérin",
   keywords: 'debit compresseur volume air libre normo litre nl/min',
   desc: "Volume d'air libre consommé par cycle et débit moyen à fournir par le réseau / compresseur.",
   inputs: [
@@ -1075,7 +1129,7 @@ Calc.register({
 });
 
 Calc.register({
-  id: 'pn-flamb', cat: 'pneu', title: 'Flambage de la tige (Euler)',
+  id: 'pn-flamb', cat: 'pneu', sub: 'verins', also: [['hydro', 'verins']], short: 'Flambage de la tige', title: 'Flambage de la tige (Euler)',
   keywords: 'flambement tige course longue euler elancement hydraulique',
   desc: 'Vérifie qu’une tige de vérin en compression ne flambe pas (vérins pneumatiques et hydrauliques).',
   inputs: [
@@ -1126,7 +1180,7 @@ Calc.register({
 /* =========================== HYDRAULIQUE =========================== */
 
 Calc.register({
-  id: 'hy-verin', cat: 'hydro', title: 'Vérin hydraulique : force et vitesse',
+  id: 'hy-verin', cat: 'hydro', sub: 'verins', short: 'Force, vitesse et temps de course', title: 'Vérin hydraulique : force et vitesse',
   keywords: 'verin hydraulique vitesse debit temps course rapport de section',
   desc: 'Forces, vitesses et temps de course d’un vérin double effet alimenté par un débit donné.',
   inputs: [
@@ -1177,7 +1231,7 @@ Calc.register({
 });
 
 Calc.register({
-  id: 'hy-pompe', cat: 'hydro', title: 'Pompe : débit et puissance d’entraînement',
+  id: 'hy-pompe', cat: 'hydro', sub: 'pompes', short: 'Débit et puissance d\u2019entraînement', title: 'Pompe : débit et puissance d’entraînement',
   keywords: 'pompe cylindree debit puissance moteur couple rendement volumetrique',
   desc: 'Débit réel d’une pompe volumétrique et puissance / couple nécessaires pour l’entraîner.',
   inputs: [
@@ -1220,7 +1274,7 @@ const V_CONDUITES = {
   p50: ['Pression ≤ 50 bar', 3.5], p100: ['Pression 50 à 100 bar', 4.0], p200: ['Pression 100 à 200 bar', 5.0], p300: ['Pression > 200 bar', 5.5]
 };
 Calc.register({
-  id: 'hy-conduite', cat: 'hydro', title: 'Diamètre des conduites hydrauliques',
+  id: 'hy-conduite', cat: 'hydro', sub: 'conduites', short: 'Diamètre des conduites', title: 'Diamètre des conduites hydrauliques',
   keywords: 'tuyauterie flexible vitesse ecoulement diametre interieur aspiration retour',
   desc: 'Diamètre intérieur minimal pour respecter une vitesse d’écoulement admissible, et vérification d’une conduite.',
   inputs: [
@@ -1252,7 +1306,7 @@ Calc.register({
 /* ===================== MÉCANIQUE & TRANSMISSION ===================== */
 
 Calc.register({
-  id: 'me-pcn', cat: 'meca', title: 'Puissance, couple et vitesse',
+  id: 'me-pcn', cat: 'meca', sub: 'base', short: 'Puissance, couple, vitesse', title: 'Puissance, couple et vitesse',
   keywords: 'couple puissance vitesse rotation 9550 omega arbre moteur',
   desc: 'Relation P = C·ω : calcule la grandeur inconnue à partir des deux autres.',
   inputs: [
@@ -1311,7 +1365,7 @@ TRANS_INPUTS.push(
   {id: 'N1', label: 'Vitesse à l’entrée', sym: 'N<sub>e</sub>', dim: 'rot', unit: 'tr/min', def: 1450, gt: 0}
 );
 Calc.register({
-  id: 'me-trans', cat: 'meca', title: 'Réducteur : engrenages et poulies',
+  id: 'me-trans', cat: 'meca', sub: 'trans', short: 'Réducteur (engrenages, poulies)', title: 'Réducteur : engrenages et poulies',
   keywords: 'rapport de reduction engrenage pignon roue poulie courroie reducteur multiplicateur vitesse couple sortie',
   desc: 'Rapport de réduction, vitesse et couple de sortie d’une transmission à 1, 2 ou 3 étages.',
   inputs: TRANS_INPUTS,
@@ -1364,7 +1418,7 @@ Calc.register({
 });
 
 Calc.register({
-  id: 'me-vis', cat: 'meca', title: 'Système vis-écrou',
+  id: 'me-vis', cat: 'meca', sub: 'trans', short: 'Vis-écrou', title: 'Système vis-écrou',
   keywords: 'vis a billes trapezoidale pas ecrou axe lineaire effort poussee',
   desc: 'Conversion rotation → translation : effort et vitesse linéaires, ou couple et vitesse moteur nécessaires.',
   inputs: [
@@ -1409,7 +1463,7 @@ Calc.register({
 });
 
 Calc.register({
-  id: 'me-levage', cat: 'meca', title: 'Levage et translation : effort et puissance',
+  id: 'me-levage', cat: 'meca', sub: 'manut', short: 'Levage, translation, plan incliné', title: 'Levage et translation : effort et puissance',
   keywords: 'levage treuil convoyeur translation plan incline frottement acceleration puissance moteur tambour',
   desc: 'Effort et puissance pour lever, translater ou monter une charge sur un plan incliné, avec la phase d’accélération.',
   inputs: [
@@ -1466,7 +1520,7 @@ Calc.register({
 /* ===================== ÉLECTRICITÉ & MOTEURS ===================== */
 
 Calc.register({
-  id: 'el-ohm', cat: 'elec', title: 'Loi d’Ohm et puissance',
+  id: 'el-ohm', cat: 'elec', sub: 'base', short: 'Loi d\u2019Ohm et puissance', title: 'Loi d’Ohm et puissance',
   keywords: 'ohm tension courant resistance puissance joule u=ri p=ui',
   desc: 'Récepteur résistif (ou courant continu) : calcule U, I, R et P à partir de deux grandeurs connues.',
   inputs: [
@@ -1511,7 +1565,7 @@ Calc.register({
 });
 
 Calc.register({
-  id: 'el-courant', cat: 'elec', title: 'Courant absorbé par un récepteur',
+  id: 'el-courant', cat: 'elec', sub: 'base', short: 'Courant absorbé', title: 'Courant absorbé par un récepteur',
   keywords: 'intensite courant puissance monophase triphase continu cos phi apparente reactive',
   desc: 'Courant en ligne d’un récepteur en continu, monophasé ou triphasé, à partir de sa puissance.',
   inputs: [
@@ -1553,7 +1607,7 @@ Calc.register({
 });
 
 Calc.register({
-  id: 'el-moteur', cat: 'elec', title: 'Moteur asynchrone triphasé',
+  id: 'el-moteur', cat: 'elec', sub: 'moteurs', short: 'Moteur asynchrone triphasé', title: 'Moteur asynchrone triphasé',
   keywords: 'moteur asynchrone induction plaque signaletique courant nominal glissement couple demarrage etoile triangle relais thermique',
   desc: 'À partir de la plaque signalétique : courant nominal, couple, glissement, courant et couple de démarrage.',
   inputs: [
@@ -1620,7 +1674,7 @@ const IZ_C_PVC_CU = {
   3: {1.5: 17.5, 2.5: 24, 4: 32, 6: 41, 10: 57, 16: 76, 25: 96, 35: 119, 50: 144, 70: 184, 95: 223, 120: 259, 150: 299, 185: 341, 240: 403}
 };
 Calc.register({
-  id: 'el-cable', cat: 'elec', title: 'Câble : chute de tension et section',
+  id: 'el-cable', cat: 'elec', sub: 'cables', short: 'Chute de tension et section', title: 'Câble : chute de tension et section',
   keywords: 'cable section chute de tension longueur conducteur cuivre aluminium iz courant admissible',
   desc: 'Chute de tension d’une ligne, section minimale pour respecter une chute admissible, courant admissible indicatif.',
   inputs: [
@@ -1692,7 +1746,7 @@ Calc.register({
 /* ============================== OUTILS ============================== */
 
 Calc.register({
-  id: 'ou-conv', cat: 'outils', title: 'Convertisseur d’unités',
+  id: 'ou-conv', cat: 'outils', sub: 'conv', short: 'Convertisseur d\u2019unités', title: 'Convertisseur d’unités',
   keywords: 'conversion unite bar psi pa kw ch cv nm debit pouce',
   desc: 'Conversion instantanée entre les unités usuelles d’une même grandeur.',
   /** Interface spécifique (n'utilise pas le formulaire générique) */
