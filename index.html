@@ -45,6 +45,7 @@
   --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);
   --radius:10px;
   --f-body:#dfe6f0; --f-stroke:#3b4757; --f-air:#bcd3fb; --f-rod:#b9c2cf;
+  --c-meca:#b45309; --c-meca-w:#fdf0e1; --c-elec:#1d5fd1; --c-elec-w:#e6eeff; --c-out:#0f766e; --c-out-w:#dcf3ef;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){
@@ -54,6 +55,7 @@
     --ok:#4cc38a; --ok-weak:#15302a; --warn:#f0b357; --warn-weak:#38290f;
     --bad:#ff7a7a; --bad-weak:#3b1b1f; --code:#1f2935; --shadow:none;
     --f-body:#263142; --f-stroke:#aab6c8; --f-air:#23406f; --f-rod:#4a5566;
+    --c-meca:#f2a65a; --c-meca-w:#3a2a17; --c-elec:#6aa3ff; --c-elec-w:#1a2944; --c-out:#4fc7b5; --c-out-w:#14352f;
     color-scheme:dark;
   }
 }
@@ -63,6 +65,7 @@
   --ok:#4cc38a; --ok-weak:#15302a; --warn:#f0b357; --warn-weak:#38290f;
   --bad:#ff7a7a; --bad-weak:#3b1b1f; --code:#1f2935; --shadow:none;
   --f-body:#263142; --f-stroke:#aab6c8; --f-air:#23406f; --f-rod:#4a5566;
+    --c-meca:#f2a65a; --c-meca-w:#3a2a17; --c-elec:#6aa3ff; --c-elec-w:#1a2944; --c-out:#4fc7b5; --c-out-w:#14352f;
   color-scheme:dark;
 }
 
@@ -141,6 +144,43 @@ footer{padding:14px 16px;text-align:center;font-size:12.5px;color:var(--muted)}
 .nav-item:hover{background:var(--panel2)}
 .nav-item.active{background:var(--accent-weak);color:var(--accent);font-weight:600}
 .nav-toggle{display:none;margin-bottom:10px}
+.calc-layout.no-nav{grid-template-columns:minmax(0,1fr)}
+.calc-layout.no-nav .calc-nav{display:none!important}
+/* Barre des domaines (Mécanique / Électricité / Outils) */
+.dom-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.dom-btn{--dc:var(--accent);--dw:var(--accent-weak);display:flex;align-items:center;gap:9px;padding:8px 16px 8px 9px;border:1px solid var(--border);border-radius:11px;background:var(--panel);color:var(--text);text-decoration:none;font-weight:600;min-height:46px}
+.dom-btn:hover{border-color:var(--dc)}
+.dom-btn.active{background:var(--dw);border-color:var(--dc);color:var(--dc)}
+.dom-ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--dw);color:var(--dc)}
+.dom-btn.active .dom-ic{background:var(--dc);color:var(--panel)}
+.dom-ic svg{width:18px;height:18px}
+.dom-meca{--dc:var(--c-meca);--dw:var(--c-meca-w)} .dom-elec{--dc:var(--c-elec);--dw:var(--c-elec-w)} .dom-outils{--dc:var(--c-out);--dw:var(--c-out-w)}
+/* Tuiles de choix */
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.tiles.small{grid-template-columns:repeat(auto-fill,minmax(230px,1fr));margin-bottom:8px}
+.tile{--dc:var(--accent);--dw:var(--accent-weak);display:flex;align-items:flex-start;gap:12px;text-decoration:none;color:var(--text);position:relative;transition:border-color .15s,transform .15s}
+.tile:hover{border-color:var(--dc);transform:translateY(-1px)}
+.tile.dom-meca{--dc:var(--c-meca);--dw:var(--c-meca-w)} .tile.dom-elec{--dc:var(--c-elec);--dw:var(--c-elec-w)} .tile.dom-outils{--dc:var(--c-out);--dw:var(--c-out-w)}
+.tile-ic{flex:none;width:44px;height:44px;border-radius:11px;display:grid;place-items:center;background:var(--dw);color:var(--dc)}
+.tile-ic svg{width:24px;height:24px}
+.tiles.big .tile{flex-direction:column;padding:20px}
+.tiles.big .tile-ic{width:64px;height:64px;border-radius:16px}
+.tiles.big .tile-ic svg{width:36px;height:36px}
+.tile-body{flex:1;min-width:0;padding-right:28px}
+.tile h3{margin:2px 0 4px;font-size:16px}
+.tiles.big .tile h3{font-size:20px}
+.tile p{margin:0;font-size:13.5px;color:var(--muted)}
+.tile>.nav-count{position:absolute;top:12px;right:12px}
+.sub-title{margin:18px 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.crumb a{color:inherit;text-decoration:none} .crumb a:hover{text-decoration:underline}
+.search-res{display:flex;flex-direction:column;margin-top:6px}
+.res-link{display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px dashed var(--border);color:var(--text);text-decoration:none;flex-wrap:wrap}
+.res-link:hover{background:var(--panel2)}
+.res-link .muted{margin-left:auto;font-size:13px}
+.nav-gic{width:22px;height:22px;display:inline-grid;place-items:center;color:var(--accent)}
+.nav-gic svg{width:17px;height:17px}
+a.nav-group-title{display:flex;align-items:center;gap:6px;text-decoration:none}
+a.nav-group-title:hover{color:var(--text)}
 .calc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap}
 .calc-head h2{margin:2px 0 4px;font-size:23px}
 .calc-head p{margin:0;max-width:720px}
@@ -283,7 +323,7 @@ dialog h2{margin:0 0 14px;font-size:19px}
    ===================================================================== */
 const APP = {
   name: 'Boîte à outils technique',
-  version: '0.1.2 (étape 1)',
+  version: '0.2.0 (étape 1)',
   fileFormat: 'boite-outils-technique',   // identifiant des fichiers projet
   fileVersion: 1                          // version du format JSON (migrations futures)
 };
@@ -303,7 +343,18 @@ const ICONS = {
   print:  SVG('<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>'),
   reset:  SVG('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>'),
   gear:   SVG('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>'),
-  menu:   SVG('<path d="M3 6h18M3 12h18M3 18h18"/>')
+  menu:   SVG('<path d="M3 6h18M3 12h18M3 18h18"/>'),
+  /* --- icônes des domaines et catégories de calcul --- */
+  gear:   SVG('<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/><circle cx="12" cy="12" r="6.5"/>'),
+  bolt:   SVG('<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>'),
+  tools:  SVG('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>'),
+  cyl:    SVG('<rect x="2" y="8" width="12" height="8" rx="1.5"/><path d="M8 8v8M14 12h8M4.5 5.5V8"/><path d="M3 4h3"/>'),
+  drop:   SVG('<path d="M12 2.8l5.6 5.9a7.6 7.6 0 1 1-11.2 0z"/>'),
+  gears:  SVG('<circle cx="8.5" cy="9" r="5"/><circle cx="8.5" cy="9" r="1.6"/><circle cx="17" cy="16.5" r="3.8"/><circle cx="17" cy="16.5" r="1.2"/>'),
+  res:    SVG('<path d="M1.5 12h4l1.8-4 3 8 3-8 3 8 1.8-4h4.4"/>'),
+  motor:  SVG('<circle cx="12" cy="12" r="8.5"/><path d="M8.3 15.5v-7l3.7 4.6 3.7-4.6v7"/>'),
+  cable:  SVG('<path d="M3 19c6 0 4-11 10-11h2"/><rect x="15" y="5" width="6" height="6" rx="1"/><path d="M21 7h2M21 9h2"/>'),
+  conv:   SVG('<path d="M4 8h15l-4-4M20 16H5l4 4"/>')
 };
 
 /* =====================================================================
@@ -546,7 +597,8 @@ const App = {
 
   /** Affiche le module correspondant à l'ancre (#id/sous-page) */
   route(){
-    const [id, sub] = decodeURIComponent(location.hash.slice(1)).split('/');
+    const [id, ...rest] = decodeURIComponent(location.hash.slice(1)).split('/');
+    const sub = rest.join('/');
     const m = this.modules.find(x => x.id === id) || this.modules[0];
     for (const x of this.modules){
       this.views[x.id].hidden = x !== m;
@@ -628,29 +680,37 @@ const Home = {
    ===================================================================== */
 const Calc = {
   id: 'calc', label: 'Calculs', icon: 'calc',
-  /* Arborescence du menu : domaine > rubrique > calculateurs.
-     Un calculateur indique sa place par cat + sub, et peut apparaître
-     dans d'autres rubriques via also: [[cat, sub], ...]. */
+  /* Arborescence : DOMAINE (icône) > CATÉGORIE (icône) > rubrique > calculateurs.
+     Un calculateur indique sa place par cat + sub ; il peut aussi apparaître
+     dans d'autres rubriques via also: [[cat, sub], ...].
+     Une catégorie à rubrique unique affiche directement ses calculateurs. */
+  domains: [
+    {id: 'meca',   label: 'Mécanique',   icon: 'gear',  desc: 'Pneumatique, hydraulique, transmissions, levage'},
+    {id: 'elec',   label: 'Électricité', icon: 'bolt',  desc: 'Lois fondamentales, moteurs, câbles'},
+    {id: 'outils', label: 'Outils',      icon: 'tools', desc: 'Convertisseur d’unités'}
+  ],
   cats: [
-    {id: 'pneu',   label: 'Pneumatique', subs: [
+    {id: 'pneu', dom: 'meca', label: 'Pneumatique', icon: 'cyl', desc: 'Vérins : effort, choix du diamètre, consommation d’air, flambage', subs: [
       {id: 'verins', label: 'Vérins'}]},
-    {id: 'hydro',  label: 'Hydraulique', subs: [
+    {id: 'hydro', dom: 'meca', label: 'Hydraulique', icon: 'drop', desc: 'Vérins, pompes, conduites', subs: [
       {id: 'verins', label: 'Vérins'},
       {id: 'pompes', label: 'Pompes'},
       {id: 'conduites', label: 'Conduites'}]},
-    {id: 'meca',   label: 'Mécanique', subs: [
+    {id: 'meca', dom: 'meca', label: 'Transmissions et mouvements', icon: 'gears', desc: 'Couple, réducteurs, vis-écrou, levage et translation', subs: [
       {id: 'base', label: 'Couple et puissance'},
       {id: 'trans', label: 'Transmissions'},
       {id: 'manut', label: 'Levage et manutention'}]},
-    {id: 'elec',   label: 'Électricité', subs: [
-      {id: 'base', label: 'Lois fondamentales'},
-      {id: 'moteurs', label: 'Moteurs'},
-      {id: 'cables', label: 'Câbles et lignes'}]},
-    {id: 'outils', label: 'Outils', subs: [
+    {id: 'elec', dom: 'elec', label: 'Lois fondamentales', icon: 'res', desc: 'Loi d’Ohm, puissance, courant absorbé', subs: [
+      {id: 'base', label: 'Lois fondamentales'}]},
+    {id: 'moteurs', dom: 'elec', label: 'Moteurs', icon: 'motor', desc: 'Moteur asynchrone triphasé : courant, couple, démarrage', subs: [
+      {id: 'all', label: 'Moteurs'}]},
+    {id: 'cables', dom: 'elec', label: 'Câbles et lignes', icon: 'cable', desc: 'Chute de tension, section, courant admissible', subs: [
+      {id: 'all', label: 'Câbles et lignes'}]},
+    {id: 'outils', dom: 'outils', label: 'Conversions', icon: 'conv', desc: 'Pression, force, puissance, débit, couple…', subs: [
       {id: 'conv', label: 'Conversions'}]}
   ],
   defs: [], byId: {},
-  cur: null, refs: null,
+  cur: null, refs: null, navDom: null,
 
   register(def){
     if (this.byId[def.id]) throw new Error('Calculateur en double : ' + def.id);
@@ -658,23 +718,67 @@ const Calc = {
     this.defs.push(def); this.byId[def.id] = def;
   },
 
-  /* ---------- montage / navigation ---------- */
+  /* ---------- requêtes sur l'arborescence ---------- */
+  dom(id){ return this.domains.find(d => d.id === id); },
+  cat(id){ return this.cats.find(c => c.id === id); },
+  catsOf(dom){ return this.cats.filter(c => c.dom === dom && this.inCat(c.id).length); },
+  /** Calculateurs rangés dans la rubrique (cat, sub), y compris les renvois « also » */
+  inSub(cat, sub){
+    const own = d => d.cat === cat && d.sub === sub;
+    return this.defs.filter(d => own(d) || (d.also || []).some(([a, b]) => a === cat && b === sub))
+      .sort((x, y) => own(y) - own(x));            // calculateurs propres à la rubrique d'abord
+  },
+  /** Catégorie sans rubrique visible (rubrique unique portant le même nom) */
+  flat(c){ return c.subs.length === 1 && c.subs[0].label === c.label; },
+  inCat(cat){ const c = this.cat(cat); return c ? [...new Set(c.subs.flatMap(s => this.inSub(cat, s.id)))] : []; },
+  /** Libellés domaine / catégorie / rubrique d'un calculateur */
+  placeOf(def){
+    const c = this.cat(def.cat), d = c && this.dom(c.dom);
+    const s = c && !this.flat(c) ? c.subs.find(x => x.id === def.sub) : null;
+    return {d, c, s};
+  },
+  ic(name, cls){ return h('span', {class: cls || 'ic', html: ICONS[name] || ''}); },
+
+  /* ---------- montage ---------- */
   mount(el){
+    this.domBar = h('nav', {class: 'dom-bar', 'aria-label': 'Domaines de calcul'},
+      this.domains.map(d => h('a', {class: 'dom-btn dom-' + d.id, href: '#calc/d/' + d.id, 'data-dom': d.id},
+        this.ic(d.icon, 'dom-ic'), h('span', {}, d.label))));
     this.nav = h('aside', {class: 'panel calc-nav', 'aria-label': 'Liste des calculs'});
     this.main = h('section', {class: 'calc-main'});
     this.navToggle = h('button', {class: 'btn nav-toggle', onclick: () => this.nav.classList.toggle('open'), html: ICONS.menu}, 'Liste des calculs');
-    el.append(this.navToggle, h('div', {class: 'calc-layout'}, this.nav, this.main));
-    this.buildNav();
+    this.layout = h('div', {class: 'calc-layout'}, this.nav, this.main);
+    el.append(this.domBar, this.navToggle, this.layout);
   },
 
-  buildNav(){
-    this.nav.append(h('input', {type: 'search', class: 'calc-search', placeholder: 'Rechercher un calcul…',
+  /** Active un domaine : bouton en surbrillance + menu latéral limité à ce domaine */
+  setDomain(dom){
+    this.domBar.querySelectorAll('.dom-btn').forEach(b => b.classList.toggle('active', b.dataset.dom === dom));
+    const noNav = !dom;
+    this.layout.classList.toggle('no-nav', noNav);
+    this.navToggle.hidden = noNav;
+    if (dom && dom !== this.navDom) this.buildNav(dom);
+    this.navDom = dom || this.navDom;
+  },
+
+  buildNav(dom){
+    this.nav.replaceChildren();
+    this.nav.append(h('input', {type: 'search', class: 'calc-search', placeholder: 'Rechercher dans ' + this.dom(dom).label + '…',
       'aria-label': 'Rechercher un calcul', oninput: e => this.filterNav(e.target.value)}));
     const st = Store.state.calc;
     st.navOpen = st.navOpen || {};
-    for (const c of this.cats){
-      const g = h('div', {class: 'nav-group'}, h('div', {class: 'nav-group-title'}, c.label));
-      for (const s of c.subs){
+    const link = (d, c, s) => h('a', {class: 'nav-item', href: '#calc/' + d.id, 'data-id': d.id,
+      'data-s': norm(d.title + ' ' + (d.keywords || '') + ' ' + c.label + ' ' + (s ? s.label : '')),
+      onclick: () => this.nav.classList.remove('open')}, d.short || d.title);
+    for (const c of this.catsOf(dom)){
+      const g = h('div', {class: 'nav-group'},
+        h('a', {class: 'nav-group-title', href: '#calc/d/' + dom + '/' + c.id}, this.ic(c.icon, 'nav-gic'), h('span', {}, c.label)));
+      if (this.flat(c)){
+        // catégorie sans rubrique : calculateurs listés directement
+        const det = h('div', {class: 'nav-sub flat', 'data-key': c.id + '/' + c.subs[0].id});
+        for (const d of this.inSub(c.id, c.subs[0].id)) det.append(link(d, c, null));
+        g.append(det);
+      } else for (const s of c.subs){
         const items = this.inSub(c.id, s.id);
         if (!items.length) continue;
         const key = c.id + '/' + s.id;
@@ -682,27 +786,11 @@ const Calc = {
           h('summary', {}, h('span', {}, s.label), h('span', {class: 'nav-count'}, items.length)));
         det.open = st.navOpen[key] !== false;           // rubriques ouvertes par défaut
         det.addEventListener('toggle', () => { if (!this.searching){ st.navOpen[key] = det.open; Store.saveSoon(); } });
-        for (const d of items)
-          det.append(h('a', {class: 'nav-item', href: '#calc/' + d.id, 'data-id': d.id,
-            'data-s': norm(d.title + ' ' + (d.keywords || '') + ' ' + c.label + ' ' + s.label),
-            onclick: () => this.nav.classList.remove('open')}, d.short || d.title));
+        for (const d of items) det.append(link(d, c, s));
         g.append(det);
       }
-      if (g.querySelector('.nav-item')) this.nav.append(g);
+      this.nav.append(g);
     }
-  },
-
-  /** Calculateurs rangés dans la rubrique (cat, sub), y compris les renvois « also » */
-  inSub(cat, sub){
-    const own = d => d.cat === cat && d.sub === sub;
-    return this.defs.filter(d => own(d) || (d.also || []).some(([a, b]) => a === cat && b === sub))
-      .sort((x, y) => own(y) - own(x));            // calculateurs propres à la rubrique d'abord
-  },
-  /** Libellés domaine / rubrique d'un calculateur */
-  placeOf(def){
-    const c = this.cats.find(x => x.id === def.cat);
-    const s = c && c.subs.find(x => x.id === def.sub);
-    return [c ? c.label : '', s ? s.label : ''];
   },
 
   filterNav(q){
@@ -714,19 +802,95 @@ const Calc = {
         let any = false;
         det.querySelectorAll('.nav-item').forEach(a => { const ok = !q || a.dataset.s.includes(q); a.hidden = !ok; any = any || ok; });
         det.hidden = !any; anyG = anyG || any;
-        det.open = q ? true : Store.state.calc.navOpen[det.dataset.key] !== false || !!det.querySelector('.nav-item.active');
+        if (det.tagName === 'DETAILS')
+          det.open = q ? true : Store.state.calc.navOpen[det.dataset.key] !== false || !!det.querySelector('.nav-item.active');
       });
       g.hidden = !anyG;
     });
   },
 
+  /* ---------- routage : #calc | #calc/d/<domaine> | #calc/d/<domaine>/<catégorie> | #calc/<calcul> ---------- */
   onShow(sub){
-    let id = this.byId[sub] ? sub : (this.byId[Store.state.calc.last] ? Store.state.calc.last : this.defs[0].id);
-    if (sub !== id) history.replaceState(null, '', '#calc/' + id);
-    if (!this.cur || this.cur.id !== id) this.open(id);
+    const p = (sub || '').split('/');
+    if (p[0] === 'd' && this.dom(p[1])){
+      if (p[2] && this.cat(p[2])) this.showCat(p[2]); else this.showDomain(p[1]);
+    } else if (this.byId[p[0]]){
+      if (!this.cur || this.cur.id !== p[0] || !this.main.querySelector('.calc-grid, .calc-custom')) this.open(p[0]);
+    } else this.showHome();
   },
-  onStateLoaded(){ if (this.cur) this.open(this.cur.id); },
-  onSettings(){ if (this.cur) this.update(); },
+  onStateLoaded(){ if (this.cur && this.main.querySelector('.calc-grid, .calc-custom')) this.open(this.cur.id); },
+  onSettings(){ if (this.cur && this.refs) this.update(); },
+
+  /** Fil d'Ariane cliquable */
+  crumbs(parts){
+    const out = [h('a', {href: '#calc'}, 'Calculs')];
+    for (const [label, href] of parts) out.push(h('span', {class: 'crumb-sep'}, ' › '), href ? h('a', {href}, label) : h('span', {}, label));
+    return h('div', {class: 'crumb'}, out);
+  },
+  /** Grande tuile cliquable avec icône */
+  tile(href, icon, title, txt, count, dom){
+    return h('a', {class: 'panel tile' + (dom ? ' dom-' + dom : ''), href},
+      this.ic(icon, 'tile-ic'),
+      h('div', {class: 'tile-body'}, h('h3', {}, title), txt ? h('p', {}, txt) : null),
+      count != null ? h('span', {class: 'nav-count'}, count) : null);
+  },
+  pageHead(crumbParts, title, desc){
+    this.cur = null; this.refs = null;
+    this.main.replaceChildren(h('div', {class: 'calc-head'}, h('div', {},
+      crumbParts ? this.crumbs(crumbParts) : null, h('h2', {}, title), desc ? h('p', {class: 'muted'}, desc) : null)));
+    document.title = title + ' — ' + APP.name;
+    window.scrollTo(0, 0);
+  },
+
+  /** Niveau 0 : choix du domaine */
+  showHome(){
+    this.setDomain(null);
+    this.pageHead(null, 'Calculs', 'Choisissez un domaine.');
+    const grid = h('div', {class: 'tiles big'}, this.domains.map(d => {
+      const n = this.catsOf(d.id).reduce((a, c) => a + this.inCat(c.id).length, 0);
+      return this.tile('#calc/d/' + d.id, d.icon, d.label, d.desc, n + ' calcul' + (n > 1 ? 's' : ''), d.id);
+    }));
+    const last = this.byId[Store.state.calc.last];
+    // recherche globale
+    const res = h('div', {class: 'search-res'});
+    const search = h('input', {type: 'search', class: 'calc-search', placeholder: 'Rechercher un calcul dans tous les domaines…', 'aria-label': 'Rechercher un calcul',
+      oninput: e => {
+        const q = norm(e.target.value.trim());
+        res.replaceChildren(...(!q ? [] : this.defs.filter(d => norm(d.title + ' ' + (d.keywords || '') + ' ' + this.cat(d.cat).label).includes(q)).map(d => {
+          const {d: dm, c} = this.placeOf(d);
+          return h('a', {class: 'res-link', href: '#calc/' + d.id}, this.ic(c.icon, 'nav-gic'), h('span', {}, d.title), h('span', {class: 'muted'}, dm.label + ' › ' + c.label));
+        })));
+        if (q && !res.children.length) res.append(h('p', {class: 'muted'}, 'Aucun calcul trouvé.'));
+      }});
+    this.main.append(grid,
+      h('div', {class: 'panel', style: 'margin-top:16px'}, search, res),
+      ...(last ? [h('p', {class: 'muted', style: 'margin-top:14px'}, 'Reprendre le dernier calcul : ', h('a', {href: '#calc/' + last.id}, last.title))] : []));
+  },
+
+  /** Niveau 1 : catégories d'un domaine */
+  showDomain(dom){
+    const d = this.dom(dom);
+    this.setDomain(dom);
+    this.pageHead([[d.label]], d.label, d.desc);
+    this.main.append(h('div', {class: 'tiles'}, this.catsOf(dom).map(c => {
+      const n = this.inCat(c.id).length;
+      return this.tile('#calc/d/' + dom + '/' + c.id, c.icon, c.label, c.desc, n, dom);
+    })));
+  },
+
+  /** Niveau 2 : rubriques et calculateurs d'une catégorie */
+  showCat(cat){
+    const c = this.cat(cat), d = this.dom(c.dom);
+    this.setDomain(c.dom);
+    this.pageHead([[d.label, '#calc/d/' + d.id], [c.label]], c.label, c.desc);
+    for (const s of c.subs){
+      const items = this.inSub(c.id, s.id);
+      if (!items.length) continue;
+      this.main.append(
+        ...(this.flat(c) ? [] : [h('h3', {class: 'sub-title'}, s.label)]),
+        h('div', {class: 'tiles small'}, items.map(x => this.tile('#calc/' + x.id, c.icon, x.short || x.title, (x.desc || '').replace(/<[^>]+>/g, ''), null, c.dom))));
+    }
+  },
 
   /* ---------- état d'un calculateur (valeurs saisies sous forme de texte + unité) ---------- */
   getState(def){
@@ -751,26 +915,28 @@ const Calc = {
   open(id){
     const def = this.byId[id]; if (!def) return;
     this.cur = def; Store.state.calc.last = id;
+    const pl = this.placeOf(def);
+    this.setDomain(pl.c.dom);
     this.nav.querySelectorAll('.nav-item').forEach(a => a.classList.toggle('active', a.dataset.id === id));
     // ouvre la rubrique qui contient le calcul affiché
-    const act = this.nav.querySelector(`.nav-sub[data-key="${def.cat}/${def.sub}"]`);
+    const act = this.nav.querySelector(`details.nav-sub[data-key="${def.cat}/${def.sub}"]`);
     if (act) act.open = true;
     const st = this.getState(def);
-    const [catLabel, subLabel] = this.placeOf(def);
+    window.scrollTo(0, 0);
     const m = this.main; m.innerHTML = '';
     document.title = def.title + ' — ' + APP.name;
 
     m.append(
       h('div', {class: 'print-only'}, APP.name + ' — fiche de calcul — ' + new Date().toLocaleString('fr-BE')),
       h('div', {class: 'calc-head'},
-        h('div', {}, h('div', {class: 'crumb'}, catLabel, subLabel ? h('span', {class: 'crumb-sep'}, ' › ') : null, subLabel), h('h2', {}, def.title), def.desc ? h('p', {class: 'muted', html: def.desc}) : null),
+        h('div', {}, this.crumbs([[pl.d.label, '#calc/d/' + pl.d.id], [pl.c.label, '#calc/d/' + pl.d.id + '/' + pl.c.id], ...(pl.s ? [[pl.s.label]] : [])]), h('h2', {}, def.title), def.desc ? h('p', {class: 'muted', html: def.desc}) : null),
         h('div', {class: 'calc-actions'},
           h('button', {class: 'btn', onclick: () => this.resetCurrent(), title: 'Revenir aux valeurs par défaut', html: ICONS.reset}, h('span', {class: 'lbl'}, 'Réinitialiser')),
           h('button', {class: 'btn', onclick: () => window.print(), title: 'Imprimer / PDF', html: ICONS.print}, h('span', {class: 'lbl'}, 'Imprimer'))))
     );
 
     // Calculateur à interface spécifique (ex. convertisseur)
-    if (def.mount){ const box = h('div'); m.append(box); def.mount(box, st); return; }
+    if (def.mount){ this.refs = null; const box = h('div', {class: 'calc-custom'}); m.append(box); def.mount(box, st); return; }
 
     const R = this.refs = {inputs: {}};
     const form = h('div', {class: 'panel'}, h('h3', {}, 'Données'));
@@ -1607,7 +1773,7 @@ Calc.register({
 });
 
 Calc.register({
-  id: 'el-moteur', cat: 'elec', sub: 'moteurs', short: 'Moteur asynchrone triphasé', title: 'Moteur asynchrone triphasé',
+  id: 'el-moteur', cat: 'moteurs', sub: 'all', short: 'Moteur asynchrone triphasé', title: 'Moteur asynchrone triphasé',
   keywords: 'moteur asynchrone induction plaque signaletique courant nominal glissement couple demarrage etoile triangle relais thermique',
   desc: 'À partir de la plaque signalétique : courant nominal, couple, glissement, courant et couple de démarrage.',
   inputs: [
@@ -1674,7 +1840,7 @@ const IZ_C_PVC_CU = {
   3: {1.5: 17.5, 2.5: 24, 4: 32, 6: 41, 10: 57, 16: 76, 25: 96, 35: 119, 50: 144, 70: 184, 95: 223, 120: 259, 150: 299, 185: 341, 240: 403}
 };
 Calc.register({
-  id: 'el-cable', cat: 'elec', sub: 'cables', short: 'Chute de tension et section', title: 'Câble : chute de tension et section',
+  id: 'el-cable', cat: 'cables', sub: 'all', short: 'Chute de tension et section', title: 'Câble : chute de tension et section',
   keywords: 'cable section chute de tension longueur conducteur cuivre aluminium iz courant admissible',
   desc: 'Chute de tension d’une ligne, section minimale pour respecter une chute admissible, courant admissible indicatif.',
   inputs: [
