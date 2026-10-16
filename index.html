@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Boîte à outils technique : calculs pneumatiques, hydrauliques, mécaniques et électriques, éditeur et simulateur de schémas.">
+<title>Boîte à outils technique</title>
+<meta name="theme-color" content="#1d5fd1">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script>
+  /* Application installable (PWA) : le manifeste n'est chargé que lorsque la page
+     est servie par un site web (GitHub Pages). Ouverte en fichier local, elle fonctionne normalement. */
+  if (/^https?:$/.test(location.protocol)){
+    var lm = document.createElement('link'); lm.rel = 'manifest'; lm.href = 'manifest.json';
+    document.head.appendChild(lm);
+  }
+</script>
+<!--
+  =====================================================================
+  BOÎTE À OUTILS TECHNIQUE — application mono-fichier (HTML + CSS + JS)
+  ---------------------------------------------------------------------
+  • Aucune dépendance externe : fonctionne hors ligne et sur GitHub Pages.
+  • Organisation du code JavaScript (voir plus bas) :
+      1. Utilitaires (DOM, formatage des nombres)
+      2. Unités (conversion SI <-> unités d'affichage)
+      3. Store (état, mémorisation locale, export/import JSON)
+      4. App (navigation par onglets, paramètres, notifications)
+      5. Module Accueil
+      6. Module Calculs : moteur générique
+      7. Module Calculs : définitions des calculateurs  <- ajouter ici
+      8. Modules futurs (schémas, simulation, pannes)
+      9. Démarrage
+  • Pour ajouter un calculateur : copier un bloc Calc.register({...})
+    de la section 7 et l'adapter (entrées, sorties, compute()).
+  =====================================================================
+-->
+<style>
+/* ===================== THÈME (variables) ===================== */
+:root{
+  --bg:#f3f5f8; --panel:#ffffff; --panel2:#f7f9fc; --text:#18212d; --muted:#5a6577;
+  --border:#d8dee8; --accent:#1d5fd1; --accent-weak:#e6eeff; --on-accent:#fff;
+  --ok:#1b7f47; --ok-weak:#e2f4e9; --warn:#a15c00; --warn-weak:#fff2dc;
+  --bad:#c42b2b; --bad-weak:#fde8e8; --code:#eef2f7;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);
+  --radius:10px;
+  --f-body:#dfe6f0; --f-stroke:#3b4757; --f-air:#bcd3fb; --f-rod:#b9c2cf;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e131a; --panel:#161d27; --panel2:#1b2430; --text:#e5eaf1; --muted:#97a3b6;
+    --border:#2a3545; --accent:#6aa3ff; --accent-weak:#1a2944; --on-accent:#0b1320;
+    --ok:#4cc38a; --ok-weak:#15302a; --warn:#f0b357; --warn-weak:#38290f;
+    --bad:#ff7a7a; --bad-weak:#3b1b1f; --code:#1f2935; --shadow:none;
+    --f-body:#263142; --f-stroke:#aab6c8; --f-air:#23406f; --f-rod:#4a5566;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e131a; --panel:#161d27; --panel2:#1b2430; --text:#e5eaf1; --muted:#97a3b6;
+  --border:#2a3545; --accent:#6aa3ff; --accent-weak:#1a2944; --on-accent:#0b1320;
+  --ok:#4cc38a; --ok-weak:#15302a; --warn:#f0b357; --warn-weak:#38290f;
+  --bad:#ff7a7a; --bad-weak:#3b1b1f; --code:#1f2935; --shadow:none;
+  --f-body:#263142; --f-stroke:#aab6c8; --f-air:#23406f; --f-rod:#4a5566;
+  color-scheme:dark;
+}
+
+/* ===================== BASE ===================== */
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,sans-serif;min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--accent)}
+h1,h2,h3{line-height:1.2}
+.muted{color:var(--muted)}
+[hidden]{display:none!important}
+svg{flex:none}
+
+/* ===================== BARRE SUPÉRIEURE ===================== */
+.topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;white-space:nowrap;color:var(--text);text-decoration:none}
+.brand .logo{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center}
+.brand .logo svg{width:18px;height:18px}
+.tabs{display:flex;gap:2px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:8px;color:var(--muted);text-decoration:none;white-space:nowrap;font-weight:500;min-height:40px}
+.tab:hover{background:var(--panel2);color:var(--text)}
+.tab.active{background:var(--accent-weak);color:var(--accent)}
+.tab svg{width:18px;height:18px}
+.tab.future{opacity:.8}
+@media (max-width:1480px){ .tab .badge{display:none} }
+.badge{font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--border);color:var(--muted);font-weight:500}
+.top-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;min-height:38px;border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:8px;font:inherit;font-size:14px;cursor:pointer}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn:focus-visible,.tab:focus-visible,.nav-item:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.primary:hover{filter:brightness(1.08);color:var(--on-accent)}
+.btn svg{width:17px;height:17px}
+.switch{display:inline-flex;align-items:center;gap:7px;font-size:14px;color:var(--muted);cursor:pointer;user-select:none;padding:0 6px}
+.switch input{width:17px;height:17px;accent-color:var(--accent)}
+
+/* ===================== MISE EN PAGE ===================== */
+main{flex:1;width:100%;max-width:1440px;margin:0 auto;padding:16px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);min-width:0}
+.panel>h3{margin:0 0 10px;font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:650}
+footer{padding:14px 16px;text-align:center;font-size:12.5px;color:var(--muted)}
+
+/* ===================== ACCUEIL ===================== */
+.hero{padding:22px 4px 8px}
+.hero h1{margin:0 0 6px;font-size:28px}
+.hero p{margin:0;max-width:760px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin:18px 0}
+.card{display:flex;flex-direction:column;gap:8px;text-decoration:none;color:inherit}
+.card:hover{border-color:var(--accent)}
+.card .card-top{display:flex;justify-content:space-between;align-items:center}
+.card .card-ic{width:38px;height:38px;border-radius:9px;background:var(--accent-weak);color:var(--accent);display:grid;place-items:center}
+.card .card-ic svg{width:21px;height:21px}
+.card h3{margin:2px 0 0;font-size:17px}
+.card p{margin:0;font-size:14px;color:var(--muted)}
+.st-ok{background:var(--ok-weak);color:var(--ok);border-color:transparent}
+.st-todo{background:var(--panel2)}
+.two-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.two-cols ul,.two-cols ol{margin:0;padding-left:20px}
+.two-cols li{margin:4px 0}
+
+/* ===================== MODULE CALCULS ===================== */
+.calc-layout{display:grid;grid-template-columns:265px minmax(0,1fr);gap:16px;align-items:start}
+.calc-nav{position:sticky;top:76px;max-height:calc(100vh - 96px);overflow:auto;padding:10px}
+.calc-search{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);color:var(--text);font:inherit;font-size:14px}
+.nav-group-title{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 8px 4px;font-weight:650}
+.nav-item{display:block;padding:7px 10px;border-radius:7px;color:var(--text);text-decoration:none;font-size:14px}
+.nav-item:hover{background:var(--panel2)}
+.nav-item.active{background:var(--accent-weak);color:var(--accent);font-weight:600}
+.nav-toggle{display:none;margin-bottom:10px}
+.calc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.calc-head h2{margin:2px 0 4px;font-size:23px}
+.calc-head p{margin:0;max-width:720px}
+.crumb{font-size:12.5px;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.calc-actions{display:flex;gap:6px}
+.calc-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:16px;align-items:start}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.in-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,210px);gap:3px 12px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--border)}
+.in-row:last-child{border-bottom:0}
+.in-label{font-size:14px}
+.sym{font-family:"Cambria Math","Cambria","Times New Roman",serif;font-style:italic;color:var(--accent);margin-left:6px;font-size:16px;white-space:nowrap}
+.in-ctrl{display:flex;gap:4px;min-width:0}
+.in-ctrl input,.in-ctrl select,.field{min-width:0;flex:1;padding:7px 9px;min-height:38px;border:1px solid var(--border);border-radius:7px;background:var(--panel2);color:var(--text);font:inherit;font-variant-numeric:tabular-nums}
+.in-ctrl select.unit{flex:0 0 auto;width:auto;max-width:105px;padding:7px 4px}
+.unit-fixed{flex:0 0 auto;align-self:center;padding:0 4px;color:var(--muted);font-size:14px;min-width:36px}
+.in-help{grid-column:1/-1;font-size:12.5px;color:var(--muted)}
+.in-err{grid-column:1/-1;font-size:12.5px;color:var(--bad);font-weight:600}
+.in-row.invalid input{border-color:var(--bad);background:var(--bad-weak)}
+.res-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--border)}
+.res-row:last-child{border-bottom:0}
+.res-label{font-size:14px}
+.res-val{display:flex;align-items:center;gap:6px;justify-content:flex-end;text-align:right}
+.res-num{font-variant-numeric:tabular-nums;font-weight:650;font-size:16px}
+.res-row.main .res-num{font-size:22px;color:var(--accent)}
+.res-val select.unit{padding:4px 2px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font:inherit;font-size:13px}
+.res-val .unit-fixed{font-size:13.5px}
+.chip{display:inline-block;padding:2px 10px;border-radius:99px;font-weight:650;font-size:14px}
+.chip.ok{background:var(--ok-weak);color:var(--ok)} .chip.bad{background:var(--bad-weak);color:var(--bad)} .chip.warn{background:var(--warn-weak);color:var(--warn)} .chip.info{background:var(--accent-weak);color:var(--accent)}
+.msg{padding:8px 12px;border-radius:8px;margin-top:8px;font-size:14px;border-left:4px solid}
+.msg.warn{background:var(--warn-weak);border-color:var(--warn)}
+.msg.bad{background:var(--bad-weak);border-color:var(--bad)}
+.msg.info{background:var(--accent-weak);border-color:var(--accent)}
+.msg.ok{background:var(--ok-weak);border-color:var(--ok)}
+.math{font-family:"Cambria Math","Cambria","Times New Roman",serif;font-size:17px}
+.formula{display:inline-block;background:var(--code);padding:5px 11px;border-radius:6px;margin:3px 6px 3px 0}
+.steps{margin:0;padding-left:22px}
+.steps li{margin:0 0 10px}
+.step-label{font-weight:600;font-size:14px;margin-bottom:2px}
+.step-line{background:var(--code);padding:5px 10px;border-radius:6px;overflow-x:auto}
+.hyp{margin:0;padding-left:20px;font-size:14px}
+.hyp li{margin:3px 0}
+.fig{width:100%;max-width:440px;height:auto;display:block;margin:0 auto}
+.fig .b{fill:var(--f-body);stroke:var(--f-stroke);stroke-width:2}
+.fig .a{fill:var(--f-air);stroke:none}
+.fig .r{fill:var(--f-rod);stroke:var(--f-stroke);stroke-width:2}
+.fig .s{fill:none;stroke:var(--f-stroke);stroke-width:2}
+.fig .d{stroke:var(--accent);stroke-width:1.5;fill:none}
+.fig text{fill:var(--accent);font:italic 15px "Cambria Math","Times New Roman",serif}
+.fig .t2{fill:var(--muted);font:12px system-ui,sans-serif}
+table.conv{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+table.conv td{padding:7px 8px;border-bottom:1px dashed var(--border)}
+table.conv td:first-child{text-align:right;font-weight:600;width:60%}
+.print-only{display:none}
+
+/* ===================== DIVERS ===================== */
+.placeholder{max-width:780px;margin:30px auto;text-align:center;padding:30px}
+.placeholder .ph-ic{width:56px;height:56px;margin:0 auto 10px;border-radius:14px;background:var(--accent-weak);color:var(--accent);display:grid;place-items:center}
+.placeholder .ph-ic svg{width:30px;height:30px}
+.placeholder ul{text-align:left;display:inline-block;margin:10px auto 0}
+.toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:100}
+.toast{padding:10px 14px;border-radius:9px;background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--accent);box-shadow:0 4px 18px rgba(0,0,0,.15);font-size:14px;max-width:360px}
+.toast.ok{border-left-color:var(--ok)} .toast.bad{border-left-color:var(--bad)}
+dialog{border:1px solid var(--border);border-radius:12px;background:var(--panel);color:var(--text);padding:20px;max-width:440px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+dialog h2{margin:0 0 14px;font-size:19px}
+.set-row{display:grid;grid-template-columns:1fr 170px;gap:10px;align-items:center;margin:10px 0}
+.set-row select{padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:var(--panel2);color:var(--text);font:inherit}
+
+/* ===================== RESPONSIVE (tablette / mobile) ===================== */
+@media (max-width:1120px){ .calc-grid{grid-template-columns:1fr} }
+@media (max-width:880px){
+  .calc-layout{grid-template-columns:1fr}
+  .calc-nav{position:static;max-height:none;display:none}
+  .calc-nav.open{display:block}
+  .nav-toggle{display:inline-flex}
+  .two-cols{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  main{padding:12px 16px}
+  .btn .lbl{display:none}
+  .in-row{grid-template-columns:1fr}
+  .topbar{gap:8px}
+  .tabs{order:3;flex-basis:100%}
+}
+
+/* ===================== IMPRESSION ===================== */
+@media print{
+  .topbar,.calc-nav,.calc-actions,.nav-toggle,.no-print,footer,.toasts{display:none!important}
+  body{background:#fff}
+  main{max-width:none;padding:0}
+  .calc-layout,.calc-grid{display:block}
+  .col{display:block}
+  .panel{box-shadow:none;break-inside:avoid;margin-bottom:10px}
+  .print-only{display:block!important;margin-bottom:10px;font-size:12px;color:#444}
+  select{appearance:none;-webkit-appearance:none;border:0!important;background:none!important}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="#accueil"><span class="logo" id="logo"></span><span id="app-name">Boîte à outils technique</span></a>
+  <nav class="tabs" id="tabs" aria-label="Modules"></nav>
+  <div class="top-actions">
+    <label class="switch" title="Affiche le calcul pas à pas avec les valeurs"><input type="checkbox" id="pedago"> Mode détaillé</label>
+    <button class="btn" id="btn-open" title="Ouvrir un projet (.json)"><span id="ic-open"></span><span class="lbl">Ouvrir</span></button>
+    <button class="btn" id="btn-save" title="Enregistrer le projet (.json)"><span id="ic-save"></span><span class="lbl">Enregistrer</span></button>
+    <button class="btn primary" id="btn-install" title="Installer l'application sur cet ordinateur" hidden><span id="ic-install"></span><span class="lbl">Installer</span></button>
+    <button class="btn" id="btn-settings" title="Paramètres" aria-label="Paramètres"><span id="ic-gear"></span></button>
+    <input type="file" id="file-in" accept=".json,application/json" hidden>
+  </div>
+</header>
+
+<main id="views"></main>
+
+<footer>
+  <span id="foot-version"></span> · Formules et valeurs indicatives, à confronter aux données des fabricants et aux normes en vigueur.
+</footer>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<dialog id="dlg-settings">
+  <h2>Paramètres</h2>
+  <div class="set-row"><label for="set-theme">Thème</label>
+    <select id="set-theme"><option value="auto">Automatique (système)</option><option value="light">Clair</option><option value="dark">Sombre</option></select></div>
+  <div class="set-row"><label for="set-sig">Précision des résultats</label>
+    <select id="set-sig"><option value="3">3 chiffres significatifs</option><option value="4">4 chiffres significatifs</option><option value="5">5 chiffres significatifs</option></select></div>
+  <p class="muted" style="font-size:13px">Les valeurs saisies sont mémorisées dans ce navigateur. Pour les conserver ou les partager, utilisez <b>Enregistrer</b> (fichier .json).</p>
+  <div style="display:flex;justify-content:space-between;gap:8px;margin-top:16px">
+    <button class="btn" id="set-clear">Effacer les données locales</button>
+    <button class="btn primary" id="set-close">Fermer</button>
+  </div>
+</dialog>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   0. CONFIGURATION GÉNÉRALE
+   ===================================================================== */
+const APP = {
+  name: 'Boîte à outils technique',
+  version: '0.1.1 (étape 1)',
+  fileFormat: 'boite-outils-technique',   // identifiant des fichiers projet
+  fileVersion: 1                          // version du format JSON (migrations futures)
+};
+
+/* Icônes (SVG en ligne, trait = currentColor) */
+const SVG = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+const ICONS = {
+  logo:   SVG('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>'),
+  home:   SVG('<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>'),
+  calc:   SVG('<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 11h1M12 11h1M16 11h0M8 15h1M12 15h1M8 19h1M12 19h1M16 15v4"/>'),
+  schema: SVG('<path d="M2 12h4l2-5 3 10 3-10 3 10 2-5h3"/>'),
+  sim:    SVG('<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>'),
+  fault:  SVG('<path d="M12 3l10 18H2z"/><path d="M12 10v4M12 17.5v.01"/>'),
+  chip:   SVG('<rect x="6" y="6" width="12" height="12" rx="1"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>'),
+  save:   SVG('<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 21h16"/>'),
+  open:   SVG('<path d="M12 21V9M7 14l5-5 5 5"/><path d="M4 3h16"/>'),
+  print:  SVG('<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>'),
+  reset:  SVG('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>'),
+  gear:   SVG('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>'),
+  menu:   SVG('<path d="M3 6h18M3 12h18M3 18h18"/>')
+};
+
+/* =====================================================================
+   1. UTILITAIRES
+   ===================================================================== */
+
+/** Création d'élément DOM : h('div', {class:'x', onclick:fn}, enfant1, 'texte'...) */
+function h(tag, attrs, ...kids){
+  const el = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)){
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'html') el.innerHTML = v;
+    else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat(Infinity)){
+    if (k == null || k === false) continue;
+    el.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  }
+  return el;
+}
+
+/** Normalise une chaîne pour la recherche (minuscules, sans accents) */
+const norm = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/** Lecture d'un nombre saisi (accepte la virgule, les espaces) ; NaN si invalide */
+function parseNum(s){
+  const t = String(s ?? '').trim().replace(/[\s  ]/g, '').replace(',', '.');
+  if (t === '' || !/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(t)) return NaN;
+  return Number(t);
+}
+
+/** Formatage des nombres (locale fr-BE, chiffres significatifs) */
+const SUP = {'-':'⁻','0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
+const Fmt = {
+  num(x, sig){
+    sig = sig || (Store.state.settings.sig | 0) || 4;
+    if (typeof x !== 'number' || !isFinite(x)) return '—';
+    if (x === 0) return '0';
+    const ax = Math.abs(x);
+    if (ax >= 1e9 || ax < 1e-4){
+      const [m, e] = x.toExponential(sig - 1).split('e');
+      return Number(m).toLocaleString('fr-BE', {maximumFractionDigits: sig}) + ' × 10' + String(+e).replace(/./g, c => SUP[c] || c);
+    }
+    const r = ax >= Math.pow(10, sig) ? Math.round(x) : Number(x.toPrecision(sig));
+    return r.toLocaleString('fr-BE', {maximumFractionDigits: 12});
+  },
+  /** valeur réinjectée dans un champ de saisie (sans séparateur de milliers) */
+  input(x){
+    if (!isFinite(x)) return '';
+    return String(Number(x.toPrecision(6))).replace('.', ',');
+  }
+};
+
+/* =====================================================================
+   2. UNITÉS
+   Toutes les grandeurs sont manipulées en interne en unités SI.
+   Chaque unité d'affichage est définie par son facteur vers l'unité SI :
+   valeur_SI = valeur_affichée × facteur
+   ===================================================================== */
+const Units = {
+  dims: {
+    length:    {n:'Longueur',            u:{'µm':1e-6,'mm':1e-3,'cm':1e-2,'m':1,'km':1e3,'in':0.0254,'ft':0.3048}},
+    area:      {n:'Surface',             u:{'mm²':1e-6,'cm²':1e-4,'dm²':1e-2,'m²':1,'in²':6.4516e-4}},
+    volume:    {n:'Volume',              u:{'mm³':1e-9,'cm³':1e-6,'L':1e-3,'m³':1}},
+    mass:      {n:'Masse',               u:{'g':1e-3,'kg':1,'t':1e3,'lb':0.45359237}},
+    force:     {n:'Force',               u:{'N':1,'daN':10,'kN':1e3,'kgf':9.80665,'lbf':4.4482216}},
+    pressure:  {n:'Pression / contrainte',u:{'Pa':1,'kPa':1e3,'mbar':100,'bar':1e5,'MPa':1e6,'N/mm²':1e6,'GPa':1e9,'psi':6894.757,'atm':101325}},
+    torque:    {n:'Couple / moment',     u:{'N·mm':1e-3,'N·m':1,'daN·m':10,'kN·m':1e3}},
+    power:     {n:'Puissance',           u:{'mW':1e-3,'W':1,'kW':1e3,'MW':1e6,'ch':735.49875,'hp':745.69987}},
+    apparent:  {n:'Puissance apparente', u:{'VA':1,'kVA':1e3}},
+    reactive:  {n:'Puissance réactive',  u:{'var':1,'kvar':1e3}},
+    energy:    {n:'Énergie',             u:{'J':1,'kJ':1e3,'Wh':3600,'kWh':3.6e6}},
+    speed:     {n:'Vitesse linéaire',    u:{'mm/s':1e-3,'m/s':1,'m/min':1/60,'km/h':1/3.6}},
+    accel:     {n:'Accélération',        u:{'m/s²':1}},
+    rot:       {n:'Vitesse de rotation', u:{'tr/min':2*Math.PI/60,'tr/s':2*Math.PI,'rad/s':1}},
+    flow:      {n:'Débit volumique',     u:{'L/min':1/60000,'L/s':1e-3,'m³/h':1/3600,'cm³/s':1e-6,'m³/s':1}},
+    flowN:     {n:"Débit d'air libre",   u:{'NL/min':1/60000,'NL/s':1e-3,'Nm³/h':1/3600,'Nm³/min':1/60}},
+    displ:     {n:'Cylindrée',           u:{'cm³/tr':1e-6,'L/tr':1e-3}},
+    time:      {n:'Temps',               u:{'ms':1e-3,'s':1,'min':60,'h':3600}},
+    freq:      {n:'Fréquence / cadence', u:{'Hz':1,'cycles/min':1/60,'cycles/h':1/3600}},
+    voltage:   {n:'Tension',             u:{'mV':1e-3,'V':1,'kV':1e3}},
+    current:   {n:'Courant',             u:{'mA':1e-3,'A':1,'kA':1e3}},
+    resistance:{n:'Résistance',          u:{'mΩ':1e-3,'Ω':1,'kΩ':1e3,'MΩ':1e6}},
+    inertia:   {n:'Moment quadratique',  u:{'mm⁴':1e-12,'cm⁴':1e-8,'m⁴':1}},
+    angle:     {n:'Angle',               u:{'°':Math.PI/180,'rad':1}},
+    pct:       {n:'Pourcentage',         u:{'%':0.01}},
+    none:      {n:'Sans unité',          u:{'':1}}
+  },
+  lookup: {},   // symbole -> {dim, f}
+  init(){
+    for (const [dim, d] of Object.entries(this.dims))
+      for (const [sym, f] of Object.entries(d.u)) this.lookup[sym] = {dim, f};
+  },
+  f(u){ const l = this.lookup[u]; if (!l) throw new Error('Unité inconnue : ' + u); return l.f; },
+  toSI(v, u){ return v * this.f(u); },
+  fromSI(v, u){ return v / this.f(u); },
+  /** Valeur SI formatée dans l'unité u : Units.q(0.05,'mm') -> "50 mm" */
+  q(vSI, u, sig){ const s = Fmt.num(this.fromSI(vSI, u), sig); return u ? s + ' ' + u : s; }
+};
+Units.init();
+/** Raccourci très utilisé dans les calculateurs */
+const Q = (x, u) => Units.q(x, u);
+
+/* =====================================================================
+   3. STORE : état de l'application, mémorisation locale, export/import
+   ===================================================================== */
+const Store = {
+  KEY: 'boite-outils-technique-v1',
+  state: {
+    settings: {theme: 'auto', pedago: true, sig: 4},
+    calc: {last: null, items: {}},   // valeurs saisies par calculateur
+    schema: null                     // réservé à l'étape 2 (éditeur de schémas)
+  },
+  load(){
+    try{
+      const s = JSON.parse(localStorage.getItem(this.KEY) || 'null');
+      if (s && typeof s === 'object'){
+        Object.assign(this.state.settings, s.settings || {});
+        if (s.calc && s.calc.items) this.state.calc = s.calc;
+        if ('schema' in s) this.state.schema = s.schema;
+      }
+    }catch(e){ /* stockage indisponible : on continue sans */ }
+  },
+  _t: null,
+  saveSoon(){ clearTimeout(this._t); this._t = setTimeout(() => this.save(), 400); },
+  save(){ try{ localStorage.setItem(this.KEY, JSON.stringify(this.state)); }catch(e){} },
+  clearLocal(){ try{ localStorage.removeItem(this.KEY); }catch(e){} },
+
+  /** Télécharge le projet courant en JSON */
+  exportProject(){
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    const name = `projet-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.json`;
+    const data = {
+      format: APP.fileFormat, version: APP.fileVersion, app: APP.version,
+      date: d.toISOString(),
+      calc: this.state.calc,
+      schema: this.state.schema
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
+    const a = h('a', {href: url, download: name});
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    App.toast('Projet enregistré : ' + name, 'ok');
+  },
+
+  /** Charge un fichier projet JSON */
+  importProject(file){
+    const rd = new FileReader();
+    rd.onload = () => {
+      try{
+        const d = JSON.parse(rd.result);
+        if (!d || d.format !== APP.fileFormat) throw new Error("ce fichier n'est pas un projet de la boîte à outils.");
+        if (d.version > APP.fileVersion) App.toast('Fichier créé par une version plus récente : certaines données peuvent être ignorées.');
+        if (d.calc && d.calc.items) this.state.calc = d.calc;
+        if ('schema' in d) this.state.schema = d.schema;
+        this.save();
+        App.modules.forEach(m => m.onStateLoaded && m.onStateLoaded());
+        App.route();
+        App.toast('Projet chargé : ' + file.name, 'ok');
+      }catch(e){ App.toast('Import impossible : ' + e.message, 'bad'); }
+    };
+    rd.onerror = () => App.toast('Lecture du fichier impossible.', 'bad');
+    rd.readAsText(file);
+  }
+};
+
+/* =====================================================================
+   4. APP : navigation par onglets, paramètres, notifications
+   Un module = { id, label, icon, step?, mount(el), onShow(sub)?, onStateLoaded()? }
+   Navigation par ancre : #calc/pn-force ouvre directement un calculateur.
+   ===================================================================== */
+const App = {
+  modules: [], views: {}, mounted: {}, current: null,
+  register(m){ this.modules.push(m); },
+
+  init(){
+    Store.load();
+    this.applyTheme();
+    document.getElementById('logo').innerHTML = ICONS.logo;
+    document.getElementById('ic-open').innerHTML = ICONS.open;
+    document.getElementById('ic-save').innerHTML = ICONS.save;
+    document.getElementById('ic-gear').innerHTML = ICONS.gear;
+    document.getElementById('foot-version').textContent = APP.name + ' — v' + APP.version;
+
+    const tabs = document.getElementById('tabs'), views = document.getElementById('views');
+    for (const m of this.modules){
+      m.tab = h('a', {class: 'tab' + (m.step ? ' future' : ''), href: '#' + m.id,
+        title: m.step ? m.label + ' — prévu à l’étape ' + m.step : m.label, html: ICONS[m.icon] || ''}, m.label,
+        m.step ? h('span', {class: 'badge'}, 'étape ' + m.step) : null);
+      tabs.append(m.tab);
+      this.views[m.id] = h('section', {class: 'view', id: 'view-' + m.id, hidden: true});
+      views.append(this.views[m.id]);
+    }
+
+    // Barre d'actions
+    const pedago = document.getElementById('pedago');
+    pedago.checked = !!Store.state.settings.pedago;
+    pedago.addEventListener('change', () => {
+      Store.state.settings.pedago = pedago.checked; Store.saveSoon();
+      this.modules.forEach(m => m.onSettings && m.onSettings());
+    });
+    const fileIn = document.getElementById('file-in');
+    document.getElementById('btn-open').onclick = () => fileIn.click();
+    fileIn.onchange = () => { if (fileIn.files[0]) Store.importProject(fileIn.files[0]); fileIn.value = ''; };
+    document.getElementById('btn-save').onclick = () => Store.exportProject();
+
+    // Paramètres
+    const dlg = document.getElementById('dlg-settings');
+    const sTheme = document.getElementById('set-theme'), sSig = document.getElementById('set-sig');
+    document.getElementById('btn-settings').onclick = () => {
+      sTheme.value = Store.state.settings.theme; sSig.value = String(Store.state.settings.sig);
+      dlg.showModal();
+    };
+    sTheme.onchange = () => { Store.state.settings.theme = sTheme.value; this.applyTheme(); Store.saveSoon(); };
+    sSig.onchange = () => { Store.state.settings.sig = +sSig.value; Store.saveSoon(); this.modules.forEach(m => m.onSettings && m.onSettings()); };
+    document.getElementById('set-close').onclick = () => dlg.close();
+    document.getElementById('set-clear').onclick = () => {
+      if (!confirm('Effacer toutes les valeurs mémorisées dans ce navigateur ?')) return;
+      Store.clearLocal();
+      Store.state.calc = {last: null, items: {}}; Store.state.schema = null;
+      this.modules.forEach(m => m.onStateLoaded && m.onStateLoaded());
+      dlg.close(); this.route(); this.toast('Données locales effacées.', 'ok');
+    };
+
+    // Impression : toujours en thème clair
+    window.addEventListener('beforeprint', () => { this._theme = document.documentElement.dataset.theme; document.documentElement.dataset.theme = 'light'; });
+    window.addEventListener('afterprint', () => this.applyTheme());
+
+    window.addEventListener('hashchange', () => this.route());
+    this.route();
+  },
+
+  applyTheme(){
+    const t = Store.state.settings.theme;
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    else delete document.documentElement.dataset.theme;
+  },
+
+  /** Affiche le module correspondant à l'ancre (#id/sous-page) */
+  route(){
+    const [id, sub] = decodeURIComponent(location.hash.slice(1)).split('/');
+    const m = this.modules.find(x => x.id === id) || this.modules[0];
+    for (const x of this.modules){
+      this.views[x.id].hidden = x !== m;
+      x.tab.classList.toggle('active', x === m);
+      if (x === m) x.tab.setAttribute('aria-current', 'page'); else x.tab.removeAttribute('aria-current');
+    }
+    if (!this.mounted[m.id]){ m.mount(this.views[m.id]); this.mounted[m.id] = true; }
+    this.current = m;
+    if (m.onShow) m.onShow(sub);
+    document.title = (m.id === this.modules[0].id ? '' : m.label + ' — ') + APP.name;
+  },
+
+  toast(msg, type){
+    const t = h('div', {class: 'toast ' + (type || '')}, msg);
+    document.getElementById('toasts').append(t);
+    setTimeout(() => t.remove(), 4500);
+  }
+};
+
+/* =====================================================================
+   5. MODULE ACCUEIL
+   ===================================================================== */
+const Home = {
+  id: 'accueil', label: 'Accueil', icon: 'home',
+  mount(el){
+    const card = (href, icon, title, txt, status, ok) =>
+      h('a', {class: 'panel card', href},
+        h('div', {class: 'card-top'}, h('span', {class: 'card-ic', html: ICONS[icon]}),
+          h('span', {class: 'badge ' + (ok ? 'st-ok' : 'st-todo')}, status)),
+        h('h3', {}, title), h('p', {}, txt));
+    el.append(
+      h('div', {class: 'hero'},
+        h('h1', {}, APP.name),
+        h('p', {class: 'muted'}, "Calculs de dimensionnement, éditeur de schémas électriques normalisés, simulation de circuits et entraînement au diagnostic de pannes. Tout fonctionne hors ligne, dans le navigateur.")),
+      h('div', {class: 'cards'},
+        card('#calc', 'calc', 'Calculs techniques', 'Pneumatique, hydraulique, mécanique, moteurs et câbles. Formules affichées et calcul pas à pas.', 'Disponible', true),
+        card('#schemas', 'schema', 'Éditeur de schémas', 'Bibliothèque IEC 60617, glisser-déposer, câblage, repérage IEC 81346, export JSON / PDF.', 'Étape 2', false),
+        card('#simulation', 'sim', 'Simulation de circuit', 'Mise sous tension, état des bobines et contacts, courant visualisé, mesures U / I.', 'Étape 3', false),
+        card('#pannes', 'fault', 'Simulation de pannes', 'Fil coupé, contact collé, bobine HS, fusible fondu, perte de phase… pour s’entraîner au diagnostic.', 'Étape 4', false),
+        card('#schemas', 'chip', 'Électronique', 'Résistances, condensateurs, diodes, LED, transistors, capteurs, automate et E/S.', 'Étape 5', false)
+      ),
+      h('div', {class: 'two-cols'},
+        h('div', {class: 'panel'}, h('h3', {}, 'Bien démarrer'),
+          h('ol', {},
+            h('li', {}, 'Ouvrez l’onglet ', h('b', {}, 'Calculs'), ' et choisissez un calculateur dans la liste.'),
+            h('li', {}, 'Saisissez vos données : l’unité de chaque champ est modifiable, le résultat se met à jour immédiatement.'),
+            h('li', {}, 'Activez le ', h('b', {}, 'Mode détaillé'), ' pour afficher le calcul pas à pas avec les valeurs.'),
+            h('li', {}, h('b', {}, 'Enregistrer'), ' télécharge un fichier projet .json ; ', h('b', {}, 'Ouvrir'), ' le recharge.'),
+            h('li', {}, 'Le bouton ', h('b', {}, 'Imprimer'), ' d’un calcul produit une fiche (choisir « Enregistrer en PDF » pour un PDF).'))),
+        h('div', {class: 'panel'}, h('h3', {}, 'Conventions'),
+          h('ul', {},
+            h('li', {}, 'Calculs internes en unités SI ; pressions saisies en ', h('b', {}, 'relatif'), ' (manométrique) sauf mention contraire.'),
+            h('li', {}, 'Symboles électriques : IEC 60617 ; repérage : IEC 81346 (-Q1, -KM1, -F1…) ; bornes : IEC 60445 / EN 50005 (A1-A2, 13-14, 21-22).'),
+            h('li', {}, 'Chaque calcul indique ses hypothèses. Les valeurs « usuelles » proposées sont des ordres de grandeur.'),
+            h('li', {}, 'Les résultats ne remplacent pas les catalogues fabricants ni la vérification réglementaire (RGIE, IEC 60364…).'))))
+    );
+  }
+};
+
+/* =====================================================================
+   6. MODULE CALCULS — MOTEUR GÉNÉRIQUE
+   ---------------------------------------------------------------------
+   Un calculateur est décrit de façon déclarative :
+   Calc.register({
+     id, cat, title, desc, keywords,
+     inputs:  [ {id, label, sym, dim, unit, units?, def, gt?, min?, max?, int?, help?, showIf?(v)}
+                | {id, label, type:'select', options:[[valeur,'libellé'],...], def, showIf?} ],
+     outputs: [ {id, label, sym, dim, unit, main?, showIf?(v)}      // numérique
+                | {id, label, type:'text', main?} ],                 // texte / verdict
+     formulas: [html...] ou (v)=>[html...],
+     hyp:      [html...] ou (v)=>[html...],
+     figure?:  (v)=>'<svg…>',
+     compute(v, c){ ... return {idSortie: valeurSI | {text, status}} }
+   })
+   • v : valeurs saisies converties en SI (les listes déroulantes donnent leur valeur brute)
+   • c : outils -> c.u (unités choisies), c.step(libellé, formule, substitution, résultat),
+         c.warn(txt), c.note(txt), c.good(txt), c.err(txt) (bloque le résultat, renvoie null)
+   • Les bornes gt/min/max sont exprimées dans l'unité par défaut du champ.
+   ===================================================================== */
+const Calc = {
+  id: 'calc', label: 'Calculs', icon: 'calc',
+  cats: [
+    {id: 'pneu',   label: 'Pneumatique'},
+    {id: 'hydro',  label: 'Hydraulique'},
+    {id: 'meca',   label: 'Mécanique & transmission'},
+    {id: 'elec',   label: 'Électricité & moteurs'},
+    {id: 'outils', label: 'Outils'}
+  ],
+  defs: [], byId: {},
+  cur: null, refs: null,
+
+  register(def){
+    if (this.byId[def.id]) throw new Error('Calculateur en double : ' + def.id);
+    def.inputs = def.inputs || []; def.outputs = def.outputs || [];
+    this.defs.push(def); this.byId[def.id] = def;
+  },
+
+  /* ---------- montage / navigation ---------- */
+  mount(el){
+    this.nav = h('aside', {class: 'panel calc-nav', 'aria-label': 'Liste des calculs'});
+    this.main = h('section', {class: 'calc-main'});
+    this.navToggle = h('button', {class: 'btn nav-toggle', onclick: () => this.nav.classList.toggle('open'), html: ICONS.menu}, 'Liste des calculs');
+    el.append(this.navToggle, h('div', {class: 'calc-layout'}, this.nav, this.main));
+    this.buildNav();
+  },
+
+  buildNav(){
+    this.nav.append(h('input', {type: 'search', class: 'calc-search', placeholder: 'Rechercher un calcul…',
+      'aria-label': 'Rechercher un calcul', oninput: e => this.filterNav(e.target.value)}));
+    for (const c of this.cats){
+      const defs = this.defs.filter(d => d.cat === c.id);
+      if (!defs.length) continue;
+      const g = h('div', {class: 'nav-group'}, h('div', {class: 'nav-group-title'}, c.label));
+      for (const d of defs)
+        g.append(h('a', {class: 'nav-item', href: '#calc/' + d.id, 'data-id': d.id,
+          'data-s': norm(d.title + ' ' + (d.keywords || '') + ' ' + c.label),
+          onclick: () => this.nav.classList.remove('open')}, d.title));
+      this.nav.append(g);
+    }
+  },
+
+  filterNav(q){
+    q = norm(q.trim());
+    this.nav.querySelectorAll('.nav-group').forEach(g => {
+      let any = false;
+      g.querySelectorAll('.nav-item').forEach(a => { const ok = !q || a.dataset.s.includes(q); a.hidden = !ok; any = any || ok; });
+      g.hidden = !any;
+    });
+  },
+
+  onShow(sub){
+    let id = this.byId[sub] ? sub : (this.byId[Store.state.calc.last] ? Store.state.calc.last : this.defs[0].id);
+    if (sub !== id) history.replaceState(null, '', '#calc/' + id);
+    if (!this.cur || this.cur.id !== id) this.open(id);
+  },
+  onStateLoaded(){ if (this.cur) this.open(this.cur.id); },
+  onSettings(){ if (this.cur) this.update(); },
+
+  /* ---------- état d'un calculateur (valeurs saisies sous forme de texte + unité) ---------- */
+  getState(def){
+    const items = Store.state.calc.items;
+    const st = items[def.id] = items[def.id] || {};
+    st.in = st.in || {}; st.out = st.out || {};
+    for (const inp of def.inputs){
+      const s = st.in[inp.id];
+      const okUnit = s && (inp.type === 'select' || (Units.lookup[s.u] && Units.lookup[s.u].dim === inp.dim));
+      if (!okUnit) st.in[inp.id] = {v: String(inp.def ?? '').replace('.', ','), u: inp.unit};
+    }
+    return st;
+  },
+  resetCurrent(){
+    if (!this.cur) return;
+    delete Store.state.calc.items[this.cur.id];
+    this.open(this.cur.id);
+    Store.saveSoon();
+  },
+
+  /* ---------- construction de la page d'un calculateur ---------- */
+  open(id){
+    const def = this.byId[id]; if (!def) return;
+    this.cur = def; Store.state.calc.last = id;
+    this.nav.querySelectorAll('.nav-item').forEach(a => a.classList.toggle('active', a.dataset.id === id));
+    const st = this.getState(def);
+    const cat = this.cats.find(c => c.id === def.cat);
+    const m = this.main; m.innerHTML = '';
+    document.title = def.title + ' — ' + APP.name;
+
+    m.append(
+      h('div', {class: 'print-only'}, APP.name + ' — fiche de calcul — ' + new Date().toLocaleString('fr-BE')),
+      h('div', {class: 'calc-head'},
+        h('div', {}, h('div', {class: 'crumb'}, cat ? cat.label : ''), h('h2', {}, def.title), def.desc ? h('p', {class: 'muted', html: def.desc}) : null),
+        h('div', {class: 'calc-actions'},
+          h('button', {class: 'btn', onclick: () => this.resetCurrent(), title: 'Revenir aux valeurs par défaut', html: ICONS.reset}, h('span', {class: 'lbl'}, 'Réinitialiser')),
+          h('button', {class: 'btn', onclick: () => window.print(), title: 'Imprimer / PDF', html: ICONS.print}, h('span', {class: 'lbl'}, 'Imprimer'))))
+    );
+
+    // Calculateur à interface spécifique (ex. convertisseur)
+    if (def.mount){ const box = h('div'); m.append(box); def.mount(box, st); return; }
+
+    const R = this.refs = {inputs: {}};
+    const form = h('div', {class: 'panel'}, h('h3', {}, 'Données'));
+    for (const inp of def.inputs) form.append(this.inputRow(def, inp, st, R));
+
+    R.results = h('div');
+    R.msgs = h('div');
+    R.figure = def.figure ? h('div', {class: 'panel'}, h('h3', {}, 'Schéma de principe')) : null;
+    R.figBox = h('div');
+    if (R.figure) R.figure.append(R.figBox);
+    R.formulas = h('div', {class: 'math'});
+    R.steps = h('div');
+    R.hyp = h('div');
+
+    m.append(h('div', {class: 'calc-grid'},
+      h('div', {class: 'col'}, form,
+        h('div', {class: 'panel'}, h('h3', {}, 'Formules'), R.formulas),
+        h('div', {class: 'panel'}, h('h3', {}, 'Hypothèses et remarques'), R.hyp)),
+      h('div', {class: 'col'},
+        h('div', {class: 'panel'}, h('h3', {}, 'Résultats'), R.results, R.msgs),
+        R.figure,
+        h('div', {class: 'panel'}, h('h3', {}, 'Calcul pas à pas'), R.steps))
+    ));
+    this.update();
+  },
+
+  /** Ligne de saisie : libellé + champ + unité (+ aide, erreur) */
+  inputRow(def, inp, st, R){
+    const s = st.in[inp.id], fid = 'in-' + def.id + '-' + inp.id;
+    const label = h('label', {class: 'in-label', for: fid}, h('span', {html: inp.label}), inp.sym ? h('span', {class: 'sym', html: inp.sym}) : null);
+    const ctrl = h('div', {class: 'in-ctrl'});
+    const ref = {inp};
+    if (inp.type === 'select'){
+      ref.el = h('select', {id: fid, onchange: () => { s.v = ref.el.value; this.update(); }},
+        inp.options.map(([val, txt]) => h('option', {value: val}, txt)));
+      ref.el.value = s.v;
+      if (ref.el.value !== s.v){ s.v = String(inp.def); ref.el.value = s.v; }
+      ctrl.append(ref.el);
+    } else {
+      ref.el = h('input', {id: fid, type: 'text', inputmode: 'decimal', autocomplete: 'off', spellcheck: 'false', value: s.v,
+        oninput: () => { s.v = ref.el.value; this.update(); }});
+      ctrl.append(ref.el);
+      const list = inp.units || Object.keys(Units.dims[inp.dim].u);
+      if (list.length > 1){
+        ref.unit = h('select', {class: 'unit', 'aria-label': 'Unité', onchange: () => {
+          // conversion de la valeur affichée pour conserver la même grandeur physique
+          const n = parseNum(s.v);
+          if (isFinite(n)){ s.v = Fmt.input(Units.fromSI(Units.toSI(n, s.u), ref.unit.value)); ref.el.value = s.v; }
+          s.u = ref.unit.value; this.update();
+        }}, list.map(u => h('option', {value: u}, u)));
+        ref.unit.value = s.u;
+        ctrl.append(ref.unit);
+      } else if (list[0]) ctrl.append(h('span', {class: 'unit-fixed'}, list[0]));
+    }
+    ref.err = h('div', {class: 'in-err', hidden: true});
+    ref.row = h('div', {class: 'in-row'}, label, ctrl, inp.help ? h('div', {class: 'in-help', html: inp.help}) : null, ref.err);
+    R.inputs[inp.id] = ref;
+    return ref.row;
+  },
+
+  /* ---------- évaluation : lecture, validation, calcul, affichage ---------- */
+  update(){
+    const def = this.cur, R = this.refs; if (!def || !R || def.mount) return;
+    const st = this.getState(def);
+    const v = {}, u = {};
+    // 1. lecture et conversion en SI
+    for (const inp of def.inputs){
+      const s = st.in[inp.id];
+      if (inp.type === 'select'){ v[inp.id] = s.v; continue; }
+      u[inp.id] = s.u;
+      const n = parseNum(s.v);
+      v[inp.id] = isFinite(n) ? Units.toSI(n, s.u) : NaN;
+    }
+    // 2. visibilité et validation
+    let invalid = false;
+    for (const inp of def.inputs){
+      const ref = R.inputs[inp.id];
+      const vis = !inp.showIf || !!inp.showIf(v);
+      ref.row.hidden = !vis;
+      let msg = '';
+      if (vis && inp.type !== 'select'){
+        const x = v[inp.id], lim = b => Units.toSI(b, inp.unit), uu = inp.unit ? ' ' + inp.unit : '';
+        if (!isFinite(x)) msg = 'Valeur numérique attendue.';
+        else if (inp.gt != null && !(x > lim(inp.gt))) msg = `Doit être supérieur à ${Fmt.num(inp.gt)}${uu}.`;
+        else if (inp.min != null && x < lim(inp.min) - 1e-12) msg = `Doit être au moins égal à ${Fmt.num(inp.min)}${uu}.`;
+        else if (inp.max != null && x > lim(inp.max) + 1e-12) msg = `Ne doit pas dépasser ${Fmt.num(inp.max)}${uu}.`;
+        else if (inp.int && Math.abs(Units.fromSI(x, st.in[inp.id].u) - Math.round(Units.fromSI(x, st.in[inp.id].u))) > 1e-9) msg = 'Nombre entier attendu.';
+      }
+      ref.row.classList.toggle('invalid', !!msg);
+      ref.err.hidden = !msg; ref.err.textContent = msg;
+      if (msg) invalid = true;
+    }
+    // 3. calcul
+    const steps = [], msgs = [];
+    const c = {
+      u, failed: false,
+      step(label, formula, subst, result){ steps.push({label, formula, subst, result}); },
+      warn(t){ msgs.push(['warn', t]); }, note(t){ msgs.push(['info', t]); }, good(t){ msgs.push(['ok', t]); },
+      err(t){ msgs.push(['bad', t]); this.failed = true; return null; }
+    };
+    let res = null;
+    if (invalid) msgs.push(['bad', 'Corrigez les données signalées en rouge.']);
+    else {
+      try{ res = def.compute(v, c); }
+      catch(e){ console.error(e); msgs.push(['bad', 'Erreur de calcul : ' + e.message]); }
+      if (c.failed) res = null;
+    }
+    // 4. affichage
+    this.renderResults(def, st, v, res);
+    R.msgs.replaceChildren(...msgs.map(([t, txt]) => h('div', {class: 'msg ' + t, html: txt})));
+    const list = x => (typeof x === 'function' ? x(v) : x) || [];
+    R.formulas.replaceChildren(...list(def.formulas).map(f => h('span', {class: 'formula', html: f})));
+    R.hyp.replaceChildren(h('ul', {class: 'hyp'}, list(def.hyp).map(t => h('li', {html: t}))));
+    if (R.figure){ try{ R.figBox.innerHTML = def.figure(v); }catch(e){ R.figBox.textContent = ''; } }
+    if (!Store.state.settings.pedago)
+      R.steps.replaceChildren(h('p', {class: 'muted'}, 'Activez « Mode détaillé » (barre du haut) pour afficher le calcul pas à pas avec vos valeurs.'));
+    else if (!res || !steps.length)
+      R.steps.replaceChildren(h('p', {class: 'muted'}, 'Le détail apparaîtra lorsque les données seront valides.'));
+    else
+      R.steps.replaceChildren(h('ol', {class: 'steps'}, steps.map(s => h('li', {},
+        h('div', {class: 'step-label'}, s.label),
+        h('div', {class: 'step-line math', html: s.formula + (s.subst ? ' = ' + s.subst : '') + (s.result != null ? ' = <b>' + s.result + '</b>' : '')})))));
+    Store.saveSoon();
+  },
+
+  renderResults(def, st, v, res){
+    const rows = [];
+    for (const out of def.outputs){
+      if (out.showIf && !out.showIf(v)) continue;
+      const val = res ? res[out.id] : undefined;
+      if (res && val === undefined) continue;          // sortie non applicable dans ce cas
+      const label = h('div', {class: 'res-label'}, h('span', {html: out.label}), out.sym ? h('span', {class: 'sym', html: out.sym}) : null);
+      let valEl;
+      if (out.type === 'text'){
+        const o = (val && typeof val === 'object') ? val : {text: val};
+        valEl = h('div', {class: 'res-val'}, o.text == null ? h('span', {class: 'res-num'}, '—')
+          : o.status ? h('span', {class: 'chip ' + o.status, html: o.text}) : h('span', {class: 'res-num', html: o.text}));
+      } else {
+        const list = out.units || Object.keys(Units.dims[out.dim].u);
+        let unit = st.out[out.id];
+        if (!list.includes(unit)) unit = out.unit;
+        const num = h('span', {class: 'res-num'}, typeof val === 'number' ? Fmt.num(Units.fromSI(val, unit)) : '—');
+        let uEl = null;
+        if (list.length > 1){
+          uEl = h('select', {class: 'unit', 'aria-label': 'Unité du résultat', onchange: e => { st.out[out.id] = e.target.value; this.update(); }},
+            list.map(x => h('option', {value: x}, x)));
+          uEl.value = unit;
+        } else if (list[0]) uEl = h('span', {class: 'unit-fixed'}, list[0]);
+        valEl = h('div', {class: 'res-val'}, num, uEl);
+      }
+      rows.push(h('div', {class: 'res-row' + (out.main ? ' main' : '')}, label, valEl));
+    }
+    this.refs.results.replaceChildren(...rows);
+  }
+};
+
+/* =====================================================================
+   7. MODULE CALCULS — DÉFINITIONS DES CALCULATEURS
+   (Chaque bloc est indépendant ; l'ordre d'enregistrement = ordre du menu)
+   ===================================================================== */
+const {PI, sqrt, sin, cos, abs} = Math;
+const G = 9.81;          // accélération de la pesanteur [m/s²]
+const PATM = 101300;     // pression atmosphérique de référence [Pa] (1,013 bar)
+
+/* ---------- Données de référence ---------- */
+/** Alésages normalisés [D, d tige] en mm : ISO 6432 (Ø 8 à 25) et ISO 15552 (Ø 32 à 320).
+    Les diamètres de tige peuvent varier selon les fabricants (variantes tige renforcée). */
+const ISO_VERINS = [[8,4],[10,4],[12,6],[16,6],[20,8],[25,10],[32,12],[40,16],[50,20],[63,20],[80,25],[100,25],[125,32],[160,40],[200,40],[250,50],[320,63]];
+
+/** Schéma de principe d'un vérin (SVG). se = simple effet à ressort */
+function figVerin(se){
+  const spring = se ? '<path class="s" d="M150 44 L162 104 L174 44 L186 104 L198 44 L210 104 L222 44 L234 104 L246 44"/>' : '';
+  return `<svg class="fig" viewBox="0 0 400 150" role="img" aria-label="Schéma de principe d'un vérin">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker></defs>
+  <rect class="b" x="40" y="35" width="210" height="76" rx="5"/>
+  <rect class="a" x="43" y="38" width="89" height="70"/>
+  ${spring}
+  <rect class="r" x="132" y="37" width="16" height="72"/>
+  <rect class="r" x="148" y="62" width="212" height="22"/>
+  <rect class="b" x="52" y="23" width="14" height="12"/>
+  ${se ? '' : '<rect class="b" x="224" y="23" width="14" height="12"/>'}
+  <line class="d" x1="59" y1="2" x2="59" y2="22" marker-end="url(#ar)"/><text x="66" y="15">p</text>
+  <line class="d" x1="24" y1="38" x2="24" y2="108" marker-start="url(#ar)" marker-end="url(#ar)"/><text x="8" y="78">D</text>
+  <line class="d" x1="305" y1="64" x2="305" y2="82" marker-start="url(#ar)" marker-end="url(#ar)"/><text x="312" y="58">d</text>
+  <line class="d" x1="362" y1="73" x2="396" y2="73" marker-end="url(#ar)"/><text x="372" y="66">F</text>
+  <text class="t2" x="44" y="128">chambre côté fond (A)</text>
+  ${se ? '<text class="t2" x="186" y="128">ressort de rappel</text>' : '<text class="t2" x="186" y="128">chambre côté tige (A′)</text>'}
+  </svg>`;
+}
+
+/* =========================== PNEUMATIQUE =========================== */
+
+Calc.register({
+  id: 'pn-force', cat: 'pneu', title: "Force d'un vérin pneumatique",
+  keywords: 'verin effort poussee traction piston alesage',
+  desc: "Effort développé en sortie (poussée) et en rentrée (traction) à partir de l'alésage et de la pression.",
+  inputs: [
+    {id: 'type', label: 'Type de vérin', type: 'select', def: 'de', options: [['de', 'Double effet'], ['se', 'Simple effet (rappel par ressort)']]},
+    {id: 'D', label: 'Diamètre du piston (alésage)', sym: 'D', dim: 'length', unit: 'mm', def: 50, gt: 0},
+    {id: 'd', label: 'Diamètre de la tige', sym: 'd', dim: 'length', unit: 'mm', def: 20, gt: 0, showIf: v => v.type === 'de'},
+    {id: 'p', label: "Pression d'alimentation (relative)", sym: 'p', dim: 'pressure', unit: 'bar', units: ['bar', 'kPa', 'MPa', 'psi'], def: 6, gt: 0},
+    {id: 'eta', label: 'Rendement (frottements)', sym: 'η', dim: 'pct', unit: '%', def: 90, gt: 0, max: 100, help: 'Usuel : 85 à 95 % (frottement des joints).'},
+    {id: 'Fres', label: 'Effort du ressort en fin de course', sym: 'F<sub>ress</sub>', dim: 'force', unit: 'N', def: 40, min: 0, showIf: v => v.type === 'se', help: 'Valeur catalogue, ressort comprimé (cas le plus défavorable).'}
+  ],
+  outputs: [
+    {id: 'A', label: 'Section du piston', sym: 'A', dim: 'area', unit: 'cm²'},
+    {id: 'Fth', label: 'Force théorique en sortie', sym: 'F<sub>th</sub>', dim: 'force', unit: 'N'},
+    {id: 'Fout', label: 'Force utile en sortie (poussée)', sym: 'F<sub>sortie</sub>', dim: 'force', unit: 'N', main: true},
+    {id: 'Aan', label: 'Section annulaire (côté tige)', sym: 'A′', dim: 'area', unit: 'cm²'},
+    {id: 'Fin', label: 'Force utile en rentrée (traction)', sym: 'F<sub>rentrée</sub>', dim: 'force', unit: 'N', main: true},
+    {id: 'm', label: 'Masse équivalente en sortie', sym: 'm = F/g', dim: 'mass', unit: 'kg'}
+  ],
+  formulas: v => [
+    'A = π·D² / 4',
+    v.type === 'se' ? 'F<sub>sortie</sub> = η·p·A − F<sub>ress</sub>' : 'F<sub>sortie</sub> = η·p·A',
+    ...(v.type === 'de' ? ['A′ = π·(D² − d²) / 4', 'F<sub>rentrée</sub> = η·p·A′'] : []),
+    '1 bar = 10⁵ Pa = 0,1 N/mm²'
+  ],
+  hyp: [
+    "Pression relative (lue au manomètre) ; contre-pression à l'échappement négligée.",
+    "Effort <b>statique</b> (vérin en appui, fin de mouvement). En mouvement, n'exploiter que 50 à 70 % de cet effort : voir « Choix du diamètre d'un vérin ».",
+    'Rendement forfaitaire représentant les frottements des joints.',
+    'Masse équivalente calculée avec g = 9,81 m/s² (charge soulevable à l’équilibre, sans marge).'
+  ],
+  figure: v => figVerin(v.type === 'se'),
+  compute(v, c){
+    c.step('Pression exprimée en N/mm²', 'p = ' + Q(v.p, c.u.p), null, Q(v.p, 'N/mm²'));
+    const A = PI * v.D ** 2 / 4;
+    c.step('Section du piston', 'A = π·D²/4', `π × (${Q(v.D, 'mm')})² / 4`, Q(A, 'mm²'));
+    const Fth = v.p * A;
+    c.step('Force théorique en sortie', 'F<sub>th</sub> = p·A', `${Q(v.p, 'N/mm²')} × ${Q(A, 'mm²')}`, Q(Fth, 'N'));
+    let Fout = v.eta * Fth;
+    const r = {A, Fth};
+    if (v.type === 'se'){
+      Fout -= v.Fres;
+      c.step('Force utile en sortie', 'F<sub>sortie</sub> = η·F<sub>th</sub> − F<sub>ress</sub>', `${Q(v.eta, '%')} × ${Q(Fth, 'N')} − ${Q(v.Fres, 'N')}`, Q(Fout, 'N'));
+      if (Fout <= 0) return c.err('Le ressort absorbe toute la force du piston : augmenter le diamètre ou la pression.');
+    } else {
+      c.step('Force utile en sortie', 'F<sub>sortie</sub> = η·F<sub>th</sub>', `${Q(v.eta, '%')} × ${Q(Fth, 'N')}`, Q(Fout, 'N'));
+      if (v.d >= v.D) return c.err('Le diamètre de tige doit être inférieur au diamètre du piston.');
+      const Aan = PI * (v.D ** 2 - v.d ** 2) / 4, Fin = v.eta * v.p * Aan;
+      c.step('Section annulaire', 'A′ = π·(D² − d²)/4', `π × ((${Q(v.D, 'mm')})² − (${Q(v.d, 'mm')})²) / 4`, Q(Aan, 'mm²'));
+      c.step('Force utile en rentrée', 'F<sub>rentrée</sub> = η·p·A′', `${Q(v.eta, '%')} × ${Q(v.p, 'N/mm²')} × ${Q(Aan, 'mm²')}`, Q(Fin, 'N'));
+      r.Aan = Aan; r.Fin = Fin;
+    }
+    r.Fout = Fout; r.m = Fout / G;
+    c.step('Masse équivalente', 'm = F<sub>sortie</sub> / g', `${Q(Fout, 'N')} / 9,81 m/s²`, Q(r.m, 'kg'));
+    return r;
+  }
+});
+
+Calc.register({
+  id: 'pn-diam', cat: 'pneu', title: "Choix du diamètre d'un vérin",
+  keywords: 'dimensionnement alesage taux de charge iso 15552 6432 normalise',
+  desc: "Diamètre minimal puis alésage normalisé pour fournir un effort donné, avec un taux de charge.",
+  inputs: [
+    {id: 'F', label: 'Effort utile à fournir', sym: 'F', dim: 'force', unit: 'N', def: 800, gt: 0},
+    {id: 'dir', label: "Sens de l'effort", type: 'select', def: 'sortie', options: [['sortie', 'En sortie de tige (poussée)'], ['rentree', 'En rentrée de tige (traction)']]},
+    {id: 'p', label: 'Pression disponible (relative)', sym: 'p', dim: 'pressure', unit: 'bar', units: ['bar', 'kPa', 'MPa', 'psi'], def: 6, gt: 0,
+      help: 'Prendre la pression <b>minimale</b> garantie au vérin (après détendeur et pertes).'},
+    {id: 'tau', label: 'Taux de charge admis', sym: 'τ', dim: 'pct', unit: '%', def: 70, gt: 0, max: 100,
+      help: 'Effort utile / effort théorique. Usuel : ≤ 70 % mouvement horizontal, ≤ 50 % levage vertical ou vitesse élevée, jusqu’à ~80 % en serrage statique.'}
+  ],
+  outputs: [
+    {id: 'Fth', label: 'Force théorique nécessaire', sym: 'F<sub>th</sub>', dim: 'force', unit: 'N'},
+    {id: 'Dmin', label: 'Diamètre minimal calculé (hors tige)', sym: 'D<sub>min</sub>', dim: 'length', unit: 'mm'},
+    {id: 'Dstd', label: 'Alésage normalisé retenu', type: 'text', main: true},
+    {id: 'Fstd', label: 'Force théorique avec cet alésage', sym: 'F', dim: 'force', unit: 'N'},
+    {id: 'tauR', label: 'Taux de charge réel', sym: 'τ<sub>réel</sub>', dim: 'pct', unit: '%'}
+  ],
+  formulas: v => ['F<sub>th</sub> = F / τ', 'A<sub>min</sub> = F<sub>th</sub> / p', 'D<sub>min</sub> = √(4·A<sub>min</sub> / π)',
+    ...(v.dir === 'rentree' ? ['Rentrée : π·(D² − d²)/4 ≥ A<sub>min</sub>'] : [])],
+  hyp: [
+    'Le taux de charge couvre à la fois les frottements et l’effort d’accélération de la charge.',
+    'Alésages normalisés : ' + ISO_VERINS.map(x => x[0]).join(', ') + ' mm (ISO 6432 jusqu’à Ø 25, ISO 15552 au-delà).',
+    'Diamètres de tige « standard » : à vérifier dans le catalogue du fabricant.',
+    'Vérifier ensuite le flambage de la tige pour les grandes courses en poussée.'
+  ],
+  compute(v, c){
+    const Fth = v.F / v.tau;
+    c.step('Force théorique nécessaire', 'F<sub>th</sub> = F / τ', `${Q(v.F, 'N')} / ${Q(v.tau, '%')}`, Q(Fth, 'N'));
+    const Amin = Fth / v.p;
+    c.step('Section utile minimale', 'A<sub>min</sub> = F<sub>th</sub> / p', `${Q(Fth, 'N')} / ${Q(v.p, 'N/mm²')}`, Q(Amin, 'mm²'));
+    const Dmin = sqrt(4 * Amin / PI);
+    c.step('Diamètre minimal (section pleine)', 'D<sub>min</sub> = √(4·A<sub>min</sub>/π)', `√(4 × ${Q(Amin, 'mm²')} / π)`, Q(Dmin, 'mm'));
+    const area = ([D, d]) => v.dir === 'sortie' ? PI * (D / 1000) ** 2 / 4 : PI * ((D / 1000) ** 2 - (d / 1000) ** 2) / 4;
+    const pick = ISO_VERINS.find(x => area(x) >= Amin * (1 - 1e-9));
+    if (!pick){
+      c.err('Aucun alésage normalisé ≤ Ø 320 mm ne convient : augmenter la pression, répartir l’effort sur plusieurs vérins ou passer en hydraulique.');
+      return null;
+    }
+    const [Ds, ds] = pick, As = area(pick), Fstd = v.p * As, tauR = v.F / Fstd;
+    c.step('Alésage normalisé immédiatement supérieur', v.dir === 'sortie' ? 'D ≥ D<sub>min</sub>' : 'π·(D² − d²)/4 ≥ A<sub>min</sub>', null, `Ø ${Ds} mm (tige Ø ${ds} mm)`);
+    c.step('Force théorique avec cet alésage', v.dir === 'sortie' ? 'F = p·π·D²/4' : 'F = p·π·(D² − d²)/4', `${Q(v.p, 'N/mm²')} × ${Q(As, 'mm²')}`, Q(Fstd, 'N'));
+    c.step('Taux de charge réel', 'τ<sub>réel</sub> = F / F<sub>th</sub>', `${Q(v.F, 'N')} / ${Q(Fstd, 'N')}`, Q(tauR, '%'));
+    return {Fth, Dmin, Dstd: {text: `Ø ${Ds} mm <span class="muted" style="font-size:14px;font-weight:400">(tige Ø ${ds})</span>`}, Fstd, tauR};
+  }
+});
+
+Calc.register({
+  id: 'pn-air', cat: 'pneu', title: "Consommation d'air d'un vérin",
+  keywords: 'debit compresseur volume air libre normo litre nl/min',
+  desc: "Volume d'air libre consommé par cycle et débit moyen à fournir par le réseau / compresseur.",
+  inputs: [
+    {id: 'type', label: 'Type de vérin', type: 'select', def: 'de', options: [['de', 'Double effet'], ['se', 'Simple effet']]},
+    {id: 'D', label: 'Diamètre du piston', sym: 'D', dim: 'length', unit: 'mm', def: 50, gt: 0},
+    {id: 'd', label: 'Diamètre de la tige', sym: 'd', dim: 'length', unit: 'mm', def: 20, gt: 0, showIf: v => v.type === 'de'},
+    {id: 'c', label: 'Course', sym: 'c', dim: 'length', unit: 'mm', def: 200, gt: 0},
+    {id: 'p', label: 'Pression de service (relative)', sym: 'p', dim: 'pressure', unit: 'bar', units: ['bar', 'kPa', 'MPa', 'psi'], def: 6, gt: 0},
+    {id: 'n', label: 'Cadence (cycles complets aller-retour)', sym: 'n', dim: 'freq', unit: 'cycles/min', def: 10, gt: 0},
+    {id: 'Lt', label: 'Longueur de tuyau distributeur → vérin (par orifice)', sym: 'L<sub>t</sub>', dim: 'length', unit: 'm', def: 0, min: 0, help: 'Mettre 0 pour ignorer le volume des tuyaux.'},
+    {id: 'dt', label: 'Diamètre intérieur du tuyau', sym: 'd<sub>t</sub>', dim: 'length', unit: 'mm', def: 6, gt: 0, showIf: v => v.Lt > 0, help: 'Tube Ø 8 × 6 → 6 mm ; Ø 6 × 4 → 4 mm.'}
+  ],
+  outputs: [
+    {id: 'Vg', label: 'Volume géométrique balayé par cycle', sym: 'V<sub>g</sub>', dim: 'volume', unit: 'cm³'},
+    {id: 'Vt', label: 'Volume des tuyaux par cycle', sym: 'V<sub>t</sub>', dim: 'volume', unit: 'cm³', showIf: v => v.Lt > 0},
+    {id: 'r', label: 'Taux de compression', sym: '(p + p<sub>atm</sub>)/p<sub>atm</sub>', dim: 'none', unit: ''},
+    {id: 'Vl', label: "Volume d'air libre par cycle", sym: 'V<sub>libre</sub>', dim: 'volume', unit: 'L', units: ['L', 'cm³', 'm³']},
+    {id: 'Qa', label: "Débit moyen d'air libre", sym: 'Q', dim: 'flowN', unit: 'NL/min', main: true}
+  ],
+  formulas: v => [
+    v.type === 'de' ? 'V<sub>g</sub> = [π·D²/4 + π·(D² − d²)/4]·c' : 'V<sub>g</sub> = π·D²/4 · c',
+    'V<sub>t</sub> = n<sub>tuyaux</sub>·π·d<sub>t</sub>²/4 · L<sub>t</sub>',
+    'V<sub>libre</sub> = (V<sub>g</sub> + V<sub>t</sub>)·(p + p<sub>atm</sub>) / p<sub>atm</sub>',
+    'Q = V<sub>libre</sub> · n'
+  ],
+  hyp: [
+    'Loi de Boyle-Mariotte : détente isotherme, p<sub>atm</sub> = 1,013 bar.',
+    '« Air libre » (NL) : volume ramené à la pression atmosphérique, à température constante.',
+    'Volumes morts du vérin négligés ; fuites non comptées.',
+    'Pour dimensionner le compresseur : additionner tous les consommateurs, majorer de 10 à 25 % (fuites, extensions) et tenir compte du taux de marche.'
+  ],
+  figure: v => figVerin(v.type === 'se'),
+  compute(v, c){
+    const A = PI * v.D ** 2 / 4;
+    c.step('Section du piston', 'A = π·D²/4', `π × (${Q(v.D, 'mm')})² / 4`, Q(A, 'cm²'));
+    let Vg = A * v.c;
+    if (v.type === 'de'){
+      if (v.d >= v.D) return c.err('Le diamètre de tige doit être inférieur au diamètre du piston.');
+      const Aan = PI * (v.D ** 2 - v.d ** 2) / 4;
+      c.step('Section annulaire', 'A′ = π·(D² − d²)/4', `π × ((${Q(v.D, 'mm')})² − (${Q(v.d, 'mm')})²) / 4`, Q(Aan, 'cm²'));
+      Vg += Aan * v.c;
+      c.step('Volume balayé (sortie + rentrée)', 'V<sub>g</sub> = (A + A′)·c', `(${Q(A, 'cm²')} + ${Q(Aan, 'cm²')}) × ${Q(v.c, 'cm')}`, Q(Vg, 'cm³'));
+    } else c.step('Volume balayé (sortie)', 'V<sub>g</sub> = A·c', `${Q(A, 'cm²')} × ${Q(v.c, 'cm')}`, Q(Vg, 'cm³'));
+    const nt = v.type === 'de' ? 2 : 1;
+    const Vt = v.Lt > 0 ? nt * PI * v.dt ** 2 / 4 * v.Lt : 0;
+    if (Vt) c.step('Volume des tuyaux', 'V<sub>t</sub> = n<sub>tuyaux</sub>·π·d<sub>t</sub>²/4·L<sub>t</sub>', `${nt} × π × (${Q(v.dt, 'mm')})² / 4 × ${Q(v.Lt, 'm')}`, Q(Vt, 'cm³'));
+    const r = (v.p + PATM) / PATM;
+    c.step('Taux de compression', '(p + p<sub>atm</sub>)/p<sub>atm</sub>', `(${Q(v.p, 'bar')} + 1,013 bar) / 1,013 bar`, Fmt.num(r));
+    const Vl = (Vg + Vt) * r;
+    c.step("Volume d'air libre par cycle", 'V<sub>libre</sub> = (V<sub>g</sub> + V<sub>t</sub>)·r', `${Q(Vg + Vt, 'cm³')} × ${Fmt.num(r)}`, Q(Vl, 'L'));
+    const Qa = Vl * v.n;
+    c.step('Débit moyen', 'Q = V<sub>libre</sub>·n', `${Q(Vl, 'L')} × ${Q(v.n, 'cycles/min')}`, Q(Qa, 'NL/min'));
+    return {Vg, Vt: Vt || undefined, r, Vl, Qa};
+  }
+});
+
+Calc.register({
+  id: 'pn-flamb', cat: 'pneu', title: 'Flambage de la tige (Euler)',
+  keywords: 'flambement tige course longue euler elancement hydraulique',
+  desc: 'Vérifie qu’une tige de vérin en compression ne flambe pas (vérins pneumatiques et hydrauliques).',
+  inputs: [
+    {id: 'd', label: 'Diamètre de la tige', sym: 'd', dim: 'length', unit: 'mm', def: 20, gt: 0},
+    {id: 'L', label: 'Longueur libre (tige sortie)', sym: 'L', dim: 'length', unit: 'mm', def: 600, gt: 0,
+      help: 'Distance entre les points de fixation, vérin complètement sorti (≈ course + longueur du corps selon le montage).'},
+    {id: 'cas', label: 'Montage (cas d’Euler)', type: 'select', def: '2', options: [
+      ['1', 'Cas 1 : encastré – libre (K = 2)'], ['2', 'Cas 2 : articulé – articulé (K = 1)'],
+      ['3', 'Cas 3 : encastré – articulé guidé (K = 0,7)'], ['4', 'Cas 4 : encastré – encastré guidé (K = 0,5)']]},
+    {id: 'E', label: 'Module d’élasticité (acier ≈ 210 GPa)', sym: 'E', dim: 'pressure', unit: 'GPa', units: ['GPa', 'MPa'], def: 210, gt: 0},
+    {id: 's', label: 'Coefficient de sécurité', sym: 's', dim: 'none', unit: '', def: 3.5, gt: 1, help: 'Usuel : 2,5 à 4.'},
+    {id: 'F', label: 'Effort de compression appliqué', sym: 'F', dim: 'force', unit: 'N', def: 1060, gt: 0, help: 'Voir « Force d’un vérin » (force en sortie).'}
+  ],
+  outputs: [
+    {id: 'I', label: 'Moment quadratique de la tige', sym: 'I', dim: 'inertia', unit: 'mm⁴'},
+    {id: 'Lf', label: 'Longueur de flambage', sym: 'L<sub>f</sub>', dim: 'length', unit: 'mm'},
+    {id: 'lam', label: 'Élancement', sym: 'λ', dim: 'none', unit: ''},
+    {id: 'Fcr', label: 'Charge critique d’Euler', sym: 'F<sub>cr</sub>', dim: 'force', unit: 'N'},
+    {id: 'Fadm', label: 'Charge admissible', sym: 'F<sub>adm</sub>', dim: 'force', unit: 'N', main: true},
+    {id: 'ok', label: 'Vérification', type: 'text', main: true}
+  ],
+  formulas: ['I = π·d⁴ / 64', 'L<sub>f</sub> = K·L', 'F<sub>cr</sub> = π²·E·I / L<sub>f</sub>²', 'F<sub>adm</sub> = F<sub>cr</sub> / s', 'λ = L<sub>f</sub> / i  avec  i = d/4'],
+  hyp: [
+    'Tige pleine en acier, chargée axialement ; poids propre et efforts transversaux négligés.',
+    'Euler n’est valable que pour les tiges élancées (λ ≳ 90–100 pour l’acier). Sinon : Tetmajer / Rankine ou abaques fabricant.',
+    'Le choix du cas d’Euler dépend des fixations du corps et de la tige : en cas de doute, prendre le cas le plus défavorable.'
+  ],
+  compute(v, c){
+    const K = {1: 2, 2: 1, 3: 0.7, 4: 0.5}[v.cas];
+    const I = PI * v.d ** 4 / 64;
+    c.step('Moment quadratique', 'I = π·d⁴/64', `π × (${Q(v.d, 'mm')})⁴ / 64`, Q(I, 'mm⁴'));
+    const Lf = K * v.L;
+    c.step('Longueur de flambage', 'L<sub>f</sub> = K·L', `${Fmt.num(K)} × ${Q(v.L, 'mm')}`, Q(Lf, 'mm'));
+    const lam = Lf / (v.d / 4);
+    c.step('Élancement', 'λ = L<sub>f</sub> / (d/4)', `${Q(Lf, 'mm')} / ${Q(v.d / 4, 'mm')}`, Fmt.num(lam));
+    const Fcr = PI ** 2 * v.E * I / Lf ** 2;
+    c.step('Charge critique', 'F<sub>cr</sub> = π²·E·I/L<sub>f</sub>²', `π² × ${Q(v.E, 'N/mm²')} × ${Q(I, 'mm⁴')} / (${Q(Lf, 'mm')})²`, Q(Fcr, 'N'));
+    const Fadm = Fcr / v.s;
+    c.step('Charge admissible', 'F<sub>adm</sub> = F<sub>cr</sub> / s', `${Q(Fcr, 'N')} / ${Fmt.num(v.s)}`, Q(Fadm, 'N'));
+    if (lam < 90) c.warn('Élancement faible (λ < 90) : la formule d’Euler <b>surestime</b> la charge critique. Utiliser Tetmajer/Rankine ou les abaques du fabricant.');
+    const ok = v.F <= Fadm;
+    if (ok) c.good(`F = ${Q(v.F, 'N')} ≤ F<sub>adm</sub> = ${Q(Fadm, 'N')}.`);
+    else c.warn(`F = ${Q(v.F, 'N')} > F<sub>adm</sub> : augmenter le diamètre de tige, réduire la longueur libre ou mieux guider la tige.`);
+    return {I, Lf, lam, Fcr, Fadm, ok: ok ? {text: 'Pas de flambage', status: 'ok'} : {text: 'Risque de flambage', status: 'bad'}};
+  }
+});
+
+/* =========================== HYDRAULIQUE =========================== */
+
+Calc.register({
+  id: 'hy-verin', cat: 'hydro', title: 'Vérin hydraulique : force et vitesse',
+  keywords: 'verin hydraulique vitesse debit temps course rapport de section',
+  desc: 'Forces, vitesses et temps de course d’un vérin double effet alimenté par un débit donné.',
+  inputs: [
+    {id: 'D', label: 'Diamètre du piston', sym: 'D', dim: 'length', unit: 'mm', def: 63, gt: 0},
+    {id: 'd', label: 'Diamètre de la tige', sym: 'd', dim: 'length', unit: 'mm', def: 36, gt: 0},
+    {id: 'c', label: 'Course', sym: 'c', dim: 'length', unit: 'mm', def: 300, gt: 0},
+    {id: 'p', label: 'Pression de service', sym: 'p', dim: 'pressure', unit: 'bar', units: ['bar', 'MPa', 'psi'], def: 160, gt: 0},
+    {id: 'Q', label: 'Débit de la pompe', sym: 'Q', dim: 'flow', unit: 'L/min', def: 20, gt: 0},
+    {id: 'eta', label: 'Rendement hydromécanique', sym: 'η<sub>hm</sub>', dim: 'pct', unit: '%', def: 95, gt: 0, max: 100, help: 'Usuel : 90 à 97 %.'}
+  ],
+  outputs: [
+    {id: 'Fs', label: 'Force en sortie', sym: 'F<sub>sortie</sub>', dim: 'force', unit: 'kN', main: true},
+    {id: 'Fr', label: 'Force en rentrée', sym: 'F<sub>rentrée</sub>', dim: 'force', unit: 'kN', main: true},
+    {id: 'vs', label: 'Vitesse de sortie', sym: 'v<sub>s</sub>', dim: 'speed', unit: 'mm/s'},
+    {id: 'vr', label: 'Vitesse de rentrée', sym: 'v<sub>r</sub>', dim: 'speed', unit: 'mm/s'},
+    {id: 'ts', label: 'Temps de sortie', sym: 't<sub>s</sub>', dim: 'time', unit: 's'},
+    {id: 'tr', label: 'Temps de rentrée', sym: 't<sub>r</sub>', dim: 'time', unit: 's'},
+    {id: 'phi', label: 'Rapport de sections', sym: 'φ = A/A′', dim: 'none', unit: ''},
+    {id: 'Qr', label: 'Débit sortant côté fond pendant la rentrée', sym: 'φ·Q', dim: 'flow', unit: 'L/min'}
+  ],
+  formulas: ['A = π·D²/4 ;  A′ = π·(D² − d²)/4', 'F = η<sub>hm</sub>·p·A', 'v = Q / A', 't = c / v', 'φ = A / A′'],
+  hyp: [
+    'Fuites internes négligées (rendement volumétrique = 100 %), débit de pompe constant.',
+    'Contre-pression au retour et pertes de charge négligées : la pression indiquée agit entièrement sur le piston.',
+    'Accélération et décélération (amortissement de fin de course) non prises en compte dans les temps.'
+  ],
+  figure: () => figVerin(false),
+  compute(v, c){
+    if (v.d >= v.D) return c.err('Le diamètre de tige doit être inférieur au diamètre du piston.');
+    const A = PI * v.D ** 2 / 4, Aan = PI * (v.D ** 2 - v.d ** 2) / 4;
+    c.step('Section du piston', 'A = π·D²/4', `π × (${Q(v.D, 'mm')})² / 4`, Q(A, 'cm²'));
+    c.step('Section annulaire', 'A′ = π·(D² − d²)/4', `π × ((${Q(v.D, 'mm')})² − (${Q(v.d, 'mm')})²) / 4`, Q(Aan, 'cm²'));
+    const Fs = v.eta * v.p * A, Fr = v.eta * v.p * Aan;
+    c.step('Force en sortie', 'F<sub>sortie</sub> = η<sub>hm</sub>·p·A', `${Q(v.eta, '%')} × ${Q(v.p, 'N/mm²')} × ${Q(A, 'mm²')}`, Q(Fs, 'kN'));
+    c.step('Force en rentrée', 'F<sub>rentrée</sub> = η<sub>hm</sub>·p·A′', `${Q(v.eta, '%')} × ${Q(v.p, 'N/mm²')} × ${Q(Aan, 'mm²')}`, Q(Fr, 'kN'));
+    const vs = v.Q / A, vr = v.Q / Aan;
+    c.step('Vitesse de sortie', 'v<sub>s</sub> = Q / A', `${Q(v.Q, 'cm³/s')} / ${Q(A, 'cm²')}`, Q(vs, 'mm/s'));
+    c.step('Vitesse de rentrée', 'v<sub>r</sub> = Q / A′', `${Q(v.Q, 'cm³/s')} / ${Q(Aan, 'cm²')}`, Q(vr, 'mm/s'));
+    const ts = v.c / vs, tr = v.c / vr;
+    c.step('Temps de sortie', 't<sub>s</sub> = c / v<sub>s</sub>', `${Q(v.c, 'mm')} / ${Q(vs, 'mm/s')}`, Q(ts, 's'));
+    c.step('Temps de rentrée', 't<sub>r</sub> = c / v<sub>r</sub>', `${Q(v.c, 'mm')} / ${Q(vr, 'mm/s')}`, Q(tr, 's'));
+    const phi = A / Aan, Qr = phi * v.Q;
+    c.step('Rapport de sections', 'φ = A / A′', `${Q(A, 'cm²')} / ${Q(Aan, 'cm²')}`, Fmt.num(phi));
+    c.step('Débit de retour côté fond (rentrée)', 'Q<sub>retour</sub> = φ·Q', `${Fmt.num(phi)} × ${Q(v.Q, 'L/min')}`, Q(Qr, 'L/min'));
+    c.note(`Pendant la rentrée, le débit sortant côté fond (${Q(Qr, 'L/min')}) est <b>supérieur</b> au débit de la pompe : à prendre en compte pour la conduite de retour, le distributeur et le filtre retour.`);
+    return {Fs, Fr, vs, vr, ts, tr, phi, Qr};
+  }
+});
+
+Calc.register({
+  id: 'hy-pompe', cat: 'hydro', title: 'Pompe : débit et puissance d’entraînement',
+  keywords: 'pompe cylindree debit puissance moteur couple rendement volumetrique',
+  desc: 'Débit réel d’une pompe volumétrique et puissance / couple nécessaires pour l’entraîner.',
+  inputs: [
+    {id: 'Vg', label: 'Cylindrée de la pompe', sym: 'V<sub>g</sub>', dim: 'displ', unit: 'cm³/tr', def: 16, gt: 0},
+    {id: 'N', label: 'Vitesse d’entraînement', sym: 'N', dim: 'rot', unit: 'tr/min', def: 1450, gt: 0},
+    {id: 'p', label: 'Pression de service', sym: 'p', dim: 'pressure', unit: 'bar', units: ['bar', 'MPa', 'psi'], def: 150, gt: 0},
+    {id: 'ev', label: 'Rendement volumétrique', sym: 'η<sub>v</sub>', dim: 'pct', unit: '%', def: 95, gt: 0, max: 100, help: 'Pompe à engrenages : 90–95 % ; à pistons : 95–98 %.'},
+    {id: 'ehm', label: 'Rendement hydromécanique', sym: 'η<sub>hm</sub>', dim: 'pct', unit: '%', def: 90, gt: 0, max: 100, help: 'Usuel : 85 à 95 %.'}
+  ],
+  outputs: [
+    {id: 'Qth', label: 'Débit théorique', sym: 'Q<sub>th</sub>', dim: 'flow', unit: 'L/min'},
+    {id: 'Qe', label: 'Débit réel', sym: 'Q', dim: 'flow', unit: 'L/min', main: true},
+    {id: 'Ph', label: 'Puissance hydraulique utile', sym: 'P<sub>hyd</sub>', dim: 'power', unit: 'kW'},
+    {id: 'et', label: 'Rendement global', sym: 'η<sub>t</sub>', dim: 'pct', unit: '%'},
+    {id: 'Pm', label: 'Puissance d’entraînement', sym: 'P<sub>méca</sub>', dim: 'power', unit: 'kW', main: true},
+    {id: 'C', label: 'Couple d’entraînement', sym: 'C', dim: 'torque', unit: 'N·m'}
+  ],
+  formulas: ['Q = V<sub>g</sub>·N·η<sub>v</sub>', 'P<sub>hyd</sub> = p·Q', 'P[kW] = p[bar] · Q[L/min] / 600', 'η<sub>t</sub> = η<sub>v</sub>·η<sub>hm</sub>', 'P<sub>méca</sub> = P<sub>hyd</sub> / η<sub>t</sub>', 'C = V<sub>g</sub>·p / (2π·η<sub>hm</sub>)'],
+  hyp: ['Pression d’aspiration nulle (pompe en charge ou à niveau) : p = différence de pression refoulement – aspiration.', 'Rendements constants au point de fonctionnement considéré.', 'Choisir ensuite un moteur de puissance normalisée immédiatement supérieure.'],
+  compute(v, c){
+    const Nts = v.N / (2 * PI);   // tr/s
+    const Qth = v.Vg * Nts;
+    c.step('Débit théorique', 'Q<sub>th</sub> = V<sub>g</sub>·N', `${Q(v.Vg, 'cm³/tr')} × ${Q(v.N, 'tr/min')}`, Q(Qth, 'L/min'));
+    const Qe = Qth * v.ev;
+    c.step('Débit réel', 'Q = Q<sub>th</sub>·η<sub>v</sub>', `${Q(Qth, 'L/min')} × ${Q(v.ev, '%')}`, Q(Qe, 'L/min'));
+    const Ph = v.p * Qe;
+    c.step('Puissance hydraulique', 'P<sub>hyd</sub> = p·Q', `${Q(v.p, 'bar')} × ${Q(Qe, 'L/min')} / 600`, Q(Ph, 'kW'));
+    const et = v.ev * v.ehm, Pm = Ph / et;
+    c.step('Rendement global', 'η<sub>t</sub> = η<sub>v</sub>·η<sub>hm</sub>', `${Q(v.ev, '%')} × ${Q(v.ehm, '%')}`, Q(et, '%'));
+    c.step('Puissance d’entraînement', 'P<sub>méca</sub> = P<sub>hyd</sub> / η<sub>t</sub>', `${Q(Ph, 'kW')} / ${Q(et, '%')}`, Q(Pm, 'kW'));
+    const C = v.Vg * v.p / (2 * PI * v.ehm);
+    c.step('Couple d’entraînement', 'C = V<sub>g</sub>·p / (2π·η<sub>hm</sub>)', `${Q(v.Vg, 'm³')} × ${Q(v.p, 'Pa')} / (2π × ${Q(v.ehm, '%')})`, Q(C, 'N·m'));
+    return {Qth, Qe, Ph, et, Pm, C};
+  }
+});
+
+/** Vitesses maximales usuelles dans les conduites hydrauliques [m/s] (valeurs indicatives) */
+const V_CONDUITES = {
+  asp: ['Aspiration', 1.0], ret: ['Retour', 3.0],
+  p50: ['Pression ≤ 50 bar', 3.5], p100: ['Pression 50 à 100 bar', 4.0], p200: ['Pression 100 à 200 bar', 5.0], p300: ['Pression > 200 bar', 5.5]
+};
+Calc.register({
+  id: 'hy-conduite', cat: 'hydro', title: 'Diamètre des conduites hydrauliques',
+  keywords: 'tuyauterie flexible vitesse ecoulement diametre interieur aspiration retour',
+  desc: 'Diamètre intérieur minimal pour respecter une vitesse d’écoulement admissible, et vérification d’une conduite.',
+  inputs: [
+    {id: 'Q', label: 'Débit dans la conduite', sym: 'Q', dim: 'flow', unit: 'L/min', def: 40, gt: 0},
+    {id: 'type', label: 'Type de conduite', type: 'select', def: 'p200', options: [...Object.entries(V_CONDUITES).map(([k, x]) => [k, `${x[0]} (≤ ${String(x[1]).replace('.', ',')} m/s)`]), ['perso', 'Vitesse personnalisée']]},
+    {id: 'vmax', label: 'Vitesse maximale admise', sym: 'v<sub>max</sub>', dim: 'speed', unit: 'm/s', def: 4, gt: 0, showIf: v => v.type === 'perso'},
+    {id: 'di', label: 'Diamètre intérieur de la conduite choisie', sym: 'd<sub>i</sub>', dim: 'length', unit: 'mm', def: 12, gt: 0, help: 'Flexible DN 12 (1/2") → 12,7 mm environ ; tube 16 × 2 → 12 mm.'}
+  ],
+  outputs: [
+    {id: 'vm', label: 'Vitesse admise retenue', sym: 'v<sub>max</sub>', dim: 'speed', unit: 'm/s'},
+    {id: 'dmin', label: 'Diamètre intérieur minimal', sym: 'd<sub>min</sub>', dim: 'length', unit: 'mm', main: true},
+    {id: 'v', label: 'Vitesse dans la conduite choisie', sym: 'v', dim: 'speed', unit: 'm/s'},
+    {id: 'ok', label: 'Vérification', type: 'text', main: true}
+  ],
+  formulas: ['v = Q / A = 4·Q / (π·d<sub>i</sub>²)', 'd<sub>min</sub> = √(4·Q / (π·v<sub>max</sub>))'],
+  hyp: ['Vitesses maximales usuelles, indicatives (aspiration ≈ 0,5 à 1,2 m/s ; retour ≈ 2 à 3 m/s ; pression 3,5 à 5,5 m/s selon la pression) : consulter les recommandations du fabricant.', 'Une vitesse trop élevée provoque pertes de charge, échauffement, bruit et cavitation (à l’aspiration).', 'Vérifier aussi la pression de service admissible du tube ou flexible.'],
+  compute(v, c){
+    const vm = v.type === 'perso' ? v.vmax : V_CONDUITES[v.type][1];
+    const dmin = sqrt(4 * v.Q / (PI * vm));
+    c.step('Diamètre intérieur minimal', 'd<sub>min</sub> = √(4·Q/(π·v<sub>max</sub>))', `√(4 × ${Q(v.Q, 'm³/s')} / (π × ${Q(vm, 'm/s')}))`, Q(dmin, 'mm'));
+    const vr = 4 * v.Q / (PI * v.di ** 2);
+    c.step('Vitesse dans la conduite choisie', 'v = 4·Q/(π·d<sub>i</sub>²)', `4 × ${Q(v.Q, 'm³/s')} / (π × (${Q(v.di, 'm')})²)`, Q(vr, 'm/s'));
+    const ok = vr <= vm * (1 + 1e-9);
+    if (!ok) c.warn(`Vitesse trop élevée : choisir un diamètre intérieur ≥ ${Q(dmin, 'mm')}.`);
+    return {vm, dmin, v: vr, ok: ok ? {text: 'Conduite adaptée', status: 'ok'} : {text: 'Sous-dimensionnée', status: 'bad'}};
+  }
+});
+
+/* ===================== MÉCANIQUE & TRANSMISSION ===================== */
+
+Calc.register({
+  id: 'me-pcn', cat: 'meca', title: 'Puissance, couple et vitesse',
+  keywords: 'couple puissance vitesse rotation 9550 omega arbre moteur',
+  desc: 'Relation P = C·ω : calcule la grandeur inconnue à partir des deux autres.',
+  inputs: [
+    {id: 'mode', label: 'Grandeur à calculer', type: 'select', def: 'C', options: [['P', 'Puissance P'], ['C', 'Couple C'], ['N', 'Vitesse de rotation N']]},
+    {id: 'P', label: 'Puissance', sym: 'P', dim: 'power', unit: 'kW', units: ['W', 'kW', 'ch', 'hp'], def: 4, gt: 0, showIf: v => v.mode !== 'P'},
+    {id: 'C', label: 'Couple', sym: 'C', dim: 'torque', unit: 'N·m', def: 26.4, gt: 0, showIf: v => v.mode !== 'C'},
+    {id: 'N', label: 'Vitesse de rotation', sym: 'N', dim: 'rot', unit: 'tr/min', def: 1450, gt: 0, showIf: v => v.mode !== 'N'}
+  ],
+  outputs: [
+    {id: 'P', label: 'Puissance', sym: 'P', dim: 'power', unit: 'kW', units: ['W', 'kW', 'ch', 'hp'], main: true, showIf: v => v.mode === 'P'},
+    {id: 'C', label: 'Couple', sym: 'C', dim: 'torque', unit: 'N·m', main: true, showIf: v => v.mode === 'C'},
+    {id: 'N', label: 'Vitesse de rotation', sym: 'N', dim: 'rot', unit: 'tr/min', main: true, showIf: v => v.mode === 'N'},
+    {id: 'w', label: 'Vitesse angulaire', sym: 'ω', dim: 'rot', unit: 'rad/s'}
+  ],
+  formulas: ['P = C·ω', 'ω = 2π·N / 60', 'P[kW] = C[N·m] · N[tr/min] / 9550'],
+  hyp: ['Régime établi (vitesse constante).', '9550 ≈ 60 000 / (2π) : formule pratique avec P en kW et N en tr/min.'],
+  compute(v, c){
+    let P = v.P, Cm = v.C, w = v.N;
+    if (v.mode === 'P'){
+      c.step('Vitesse angulaire', 'ω = 2π·N/60', `2π × ${Q(w, 'tr/min')} / 60`, Q(w, 'rad/s'));
+      P = Cm * w;
+      c.step('Puissance', 'P = C·ω', `${Q(Cm, 'N·m')} × ${Q(w, 'rad/s')}`, Q(P, 'kW'));
+    } else if (v.mode === 'C'){
+      c.step('Vitesse angulaire', 'ω = 2π·N/60', `2π × ${Q(w, 'tr/min')} / 60`, Q(w, 'rad/s'));
+      Cm = P / w;
+      c.step('Couple', 'C = P / ω', `${Q(P, 'W')} / ${Q(w, 'rad/s')}`, Q(Cm, 'N·m'));
+    } else {
+      w = P / Cm;
+      c.step('Vitesse angulaire', 'ω = P / C', `${Q(P, 'W')} / ${Q(Cm, 'N·m')}`, Q(w, 'rad/s'));
+      c.step('Vitesse de rotation', 'N = 60·ω / (2π)', `60 × ${Q(w, 'rad/s')} / (2π)`, Q(w, 'tr/min'));
+    }
+    return {P, C: Cm, N: w, w};
+  }
+});
+
+/* Transmission : entrées générées pour 1 à 3 étages */
+const TRANS_INPUTS = [
+  {id: 'type', label: 'Type de transmission', type: 'select', def: 'eng', options: [['eng', 'Engrenages (nombres de dents)'], ['pou', 'Poulies – courroie (diamètres)'], ['i', 'Rapports de réduction connus']]},
+  {id: 'nb', label: 'Nombre d’étages', type: 'select', def: '1', options: [['1', '1 étage'], ['2', '2 étages'], ['3', '3 étages']]}
+];
+for (let k = 1; k <= 3; k++){
+  const on = v => +v.nb >= k;
+  TRANS_INPUTS.push(
+    {id: 'za' + k, label: `Étage ${k} : dents du pignon <b>menant</b>`, sym: `Z<sub>${k}</sub>`, dim: 'none', unit: '', def: [17, 20, 19][k - 1], gt: 0, int: true, showIf: v => on(v) && v.type === 'eng',
+      help: k === 1 ? 'Roue et vis sans fin : Z menant = nombre de filets de la vis.' : null},
+    {id: 'zb' + k, label: `Étage ${k} : dents de la roue <b>menée</b>`, sym: `Z′<sub>${k}</sub>`, dim: 'none', unit: '', def: [51, 60, 57][k - 1], gt: 0, int: true, showIf: v => on(v) && v.type === 'eng'},
+    {id: 'da' + k, label: `Étage ${k} : Ø primitif poulie <b>menante</b>`, sym: `D<sub>${k}</sub>`, dim: 'length', unit: 'mm', def: [100, 90, 90][k - 1], gt: 0, showIf: v => on(v) && v.type === 'pou'},
+    {id: 'db' + k, label: `Étage ${k} : Ø primitif poulie <b>menée</b>`, sym: `D′<sub>${k}</sub>`, dim: 'length', unit: 'mm', def: [250, 180, 180][k - 1], gt: 0, showIf: v => on(v) && v.type === 'pou'},
+    {id: 'i' + k, label: `Étage ${k} : rapport de réduction`, sym: `i<sub>${k}</sub>`, dim: 'none', unit: '', def: 3, gt: 0, showIf: v => on(v) && v.type === 'i'},
+    {id: 'e' + k, label: `Étage ${k} : rendement`, sym: `η<sub>${k}</sub>`, dim: 'pct', unit: '%', def: 97, gt: 0, max: 100, showIf: on,
+      help: k === 1 ? 'Engrenage droit / hélicoïdal ≈ 97–99 % ; roue et vis sans fin ≈ 40–90 % ; courroie trapézoïdale ≈ 94–97 %.' : null}
+  );
+}
+TRANS_INPUTS.push(
+  {id: 'P1', label: 'Puissance à l’entrée (arbre moteur)', sym: 'P<sub>e</sub>', dim: 'power', unit: 'kW', units: ['W', 'kW', 'ch', 'hp'], def: 1.5, gt: 0},
+  {id: 'N1', label: 'Vitesse à l’entrée', sym: 'N<sub>e</sub>', dim: 'rot', unit: 'tr/min', def: 1450, gt: 0}
+);
+Calc.register({
+  id: 'me-trans', cat: 'meca', title: 'Réducteur : engrenages et poulies',
+  keywords: 'rapport de reduction engrenage pignon roue poulie courroie reducteur multiplicateur vitesse couple sortie',
+  desc: 'Rapport de réduction, vitesse et couple de sortie d’une transmission à 1, 2 ou 3 étages.',
+  inputs: TRANS_INPUTS,
+  outputs: [
+    {id: 'i', label: 'Rapport de réduction global', sym: 'i', dim: 'none', unit: '', main: true},
+    {id: 'eta', label: 'Rendement global', sym: 'η', dim: 'pct', unit: '%'},
+    {id: 'N2', label: 'Vitesse de sortie', sym: 'N<sub>s</sub>', dim: 'rot', unit: 'tr/min', main: true},
+    {id: 'C1', label: 'Couple d’entrée', sym: 'C<sub>e</sub>', dim: 'torque', unit: 'N·m'},
+    {id: 'C2', label: 'Couple de sortie', sym: 'C<sub>s</sub>', dim: 'torque', unit: 'N·m', main: true},
+    {id: 'P2', label: 'Puissance de sortie', sym: 'P<sub>s</sub>', dim: 'power', unit: 'kW', units: ['W', 'kW', 'ch', 'hp']},
+    {id: 'Pp', label: 'Pertes', sym: 'P<sub>e</sub> − P<sub>s</sub>', dim: 'power', unit: 'W', units: ['W', 'kW']},
+    {id: 'vb', label: 'Vitesse linéaire de la courroie (étage 1)', sym: 'v', dim: 'speed', unit: 'm/s', showIf: v => v.type === 'pou'}
+  ],
+  formulas: v => [
+    v.type === 'eng' ? 'i<sub>k</sub> = Z′<sub>k</sub> / Z<sub>k</sub>' : v.type === 'pou' ? 'i<sub>k</sub> = D′<sub>k</sub> / D<sub>k</sub>' : 'i<sub>k</sub> donné',
+    'i = i<sub>1</sub>·i<sub>2</sub>·i<sub>3</sub> = N<sub>e</sub> / N<sub>s</sub>', 'η = η<sub>1</sub>·η<sub>2</sub>·η<sub>3</sub>',
+    'C<sub>e</sub> = P<sub>e</sub> / ω<sub>e</sub>', 'C<sub>s</sub> = C<sub>e</sub>·i·η', 'P<sub>s</sub> = η·P<sub>e</sub>',
+    ...(v.type === 'pou' ? ['v = ω<sub>e</sub>·D<sub>1</sub> / 2'] : [])
+  ],
+  hyp: ['i > 1 : réducteur (vitesse diminuée, couple augmenté) ; i < 1 : multiplicateur.', 'Courroie : glissement négligé (en pratique 1 à 2 % de vitesse en moins pour une courroie trapézoïdale).', 'Le sens de rotation s’inverse à chaque engrenage extérieur.', 'Vérifier le couple admissible du réducteur et le facteur de service selon l’application.'],
+  compute(v, c){
+    let i = 1, eta = 1; const parts = [], pe = [];
+    for (let k = 1; k <= +v.nb; k++){
+      let ik;
+      if (v.type === 'eng'){ ik = v['zb' + k] / v['za' + k]; c.step(`Rapport de l’étage ${k}`, `i<sub>${k}</sub> = Z′<sub>${k}</sub>/Z<sub>${k}</sub>`, `${Fmt.num(v['zb' + k])} / ${Fmt.num(v['za' + k])}`, Fmt.num(ik)); }
+      else if (v.type === 'pou'){ ik = v['db' + k] / v['da' + k]; c.step(`Rapport de l’étage ${k}`, `i<sub>${k}</sub> = D′<sub>${k}</sub>/D<sub>${k}</sub>`, `${Q(v['db' + k], 'mm')} / ${Q(v['da' + k], 'mm')}`, Fmt.num(ik)); }
+      else ik = v['i' + k];
+      i *= ik; eta *= v['e' + k]; parts.push(Fmt.num(ik)); pe.push(Q(v['e' + k], '%'));
+    }
+    if (+v.nb > 1){
+      c.step('Rapport global', 'i = Π i<sub>k</sub>', parts.join(' × '), Fmt.num(i));
+      c.step('Rendement global', 'η = Π η<sub>k</sub>', pe.join(' × '), Q(eta, '%'));
+    }
+    const N2 = v.N1 / i;
+    c.step('Vitesse de sortie', 'N<sub>s</sub> = N<sub>e</sub> / i', `${Q(v.N1, 'tr/min')} / ${Fmt.num(i)}`, Q(N2, 'tr/min'));
+    const C1 = v.P1 / v.N1;
+    c.step('Couple d’entrée', 'C<sub>e</sub> = P<sub>e</sub> / ω<sub>e</sub>', `${Q(v.P1, 'W')} / ${Q(v.N1, 'rad/s')}`, Q(C1, 'N·m'));
+    const C2 = C1 * i * eta, P2 = v.P1 * eta;
+    c.step('Couple de sortie', 'C<sub>s</sub> = C<sub>e</sub>·i·η', `${Q(C1, 'N·m')} × ${Fmt.num(i)} × ${Q(eta, '%')}`, Q(C2, 'N·m'));
+    c.step('Puissance de sortie', 'P<sub>s</sub> = η·P<sub>e</sub>', `${Q(eta, '%')} × ${Q(v.P1, 'kW')}`, Q(P2, 'kW'));
+    const r = {i, eta, N2, C1, C2, P2, Pp: v.P1 - P2};
+    if (v.type === 'pou'){
+      r.vb = v.N1 * v.da1 / 2;
+      c.step('Vitesse de la courroie', 'v = ω<sub>e</sub>·D<sub>1</sub>/2', `${Q(v.N1, 'rad/s')} × ${Q(v.da1, 'm')} / 2`, Q(r.vb, 'm/s'));
+      if (r.vb > 30) c.warn('Vitesse de courroie élevée (> 30 m/s) : vérifier la limite admise par le fabricant.');
+    }
+    if (i < 1) c.note('i < 1 : la transmission est un <b>multiplicateur</b> de vitesse.');
+    return r;
+  }
+});
+
+Calc.register({
+  id: 'me-vis', cat: 'meca', title: 'Système vis-écrou',
+  keywords: 'vis a billes trapezoidale pas ecrou axe lineaire effort poussee',
+  desc: 'Conversion rotation → translation : effort et vitesse linéaires, ou couple et vitesse moteur nécessaires.',
+  inputs: [
+    {id: 'mode', label: 'Je connais…', type: 'select', def: 'mot', options: [['mot', 'le moteur (C, N) → effort et vitesse de l’écrou'], ['ch', 'la charge (F, v) → couple et vitesse du moteur']]},
+    {id: 'ph', label: 'Pas de la vis (avance par tour)', sym: 'p<sub>h</sub>', dim: 'length', unit: 'mm', def: 5, gt: 0, help: 'Vis à plusieurs filets : pas = pas apparent × nombre de filets.'},
+    {id: 'eta', label: 'Rendement de la vis', sym: 'η', dim: 'pct', unit: '%', def: 90, gt: 0, max: 100, help: 'Vis à billes ≈ 90 % ; vis trapézoïdale ≈ 30 à 50 %.'},
+    {id: 'C', label: 'Couple sur la vis', sym: 'C', dim: 'torque', unit: 'N·m', def: 2, gt: 0, showIf: v => v.mode === 'mot'},
+    {id: 'N', label: 'Vitesse de rotation de la vis', sym: 'N', dim: 'rot', unit: 'tr/min', def: 1500, gt: 0, showIf: v => v.mode === 'mot'},
+    {id: 'F', label: 'Effort axial à fournir', sym: 'F', dim: 'force', unit: 'N', def: 2000, gt: 0, showIf: v => v.mode === 'ch'},
+    {id: 'v', label: 'Vitesse linéaire souhaitée', sym: 'v', dim: 'speed', unit: 'mm/s', def: 100, gt: 0, showIf: v => v.mode === 'ch'}
+  ],
+  outputs: [
+    {id: 'F', label: 'Effort axial disponible', sym: 'F', dim: 'force', unit: 'N', main: true, showIf: v => v.mode === 'mot'},
+    {id: 'v', label: 'Vitesse linéaire', sym: 'v', dim: 'speed', unit: 'mm/s', main: true, showIf: v => v.mode === 'mot'},
+    {id: 'C', label: 'Couple nécessaire sur la vis', sym: 'C', dim: 'torque', unit: 'N·m', main: true, showIf: v => v.mode === 'ch'},
+    {id: 'N', label: 'Vitesse de rotation nécessaire', sym: 'N', dim: 'rot', unit: 'tr/min', main: true, showIf: v => v.mode === 'ch'},
+    {id: 'Pu', label: 'Puissance utile (F·v)', sym: 'P<sub>u</sub>', dim: 'power', unit: 'W', units: ['W', 'kW']},
+    {id: 'Pm', label: 'Puissance sur la vis (C·ω)', sym: 'P', dim: 'power', unit: 'W', units: ['W', 'kW']}
+  ],
+  formulas: ['F = 2π·C·η / p<sub>h</sub>', 'C = F·p<sub>h</sub> / (2π·η)', 'v = p<sub>h</sub>·N', 'P = C·ω = F·v / η'],
+  hyp: ['Régime établi : effort d’accélération et inertie non pris en compte.', 'Frottements des guidages non compris dans F (à ajouter à l’effort de la charge).', 'Vérifier la vitesse critique de rotation et le flambage de la vis pour les grandes longueurs.'],
+  compute(v, c){
+    const r = {};
+    if (v.mode === 'mot'){
+      r.F = 2 * PI * v.C * v.eta / v.ph;
+      c.step('Effort axial', 'F = 2π·C·η / p<sub>h</sub>', `2π × ${Q(v.C, 'N·m')} × ${Q(v.eta, '%')} / ${Q(v.ph, 'm')}`, Q(r.F, 'N'));
+      r.v = v.ph * v.N / (2 * PI);
+      c.step('Vitesse linéaire', 'v = p<sub>h</sub>·N', `${Q(v.ph, 'mm')} × ${Q(v.N, 'tr/s')}`, Q(r.v, 'mm/s'));
+      r.Pm = v.C * v.N; r.Pu = r.F * r.v;
+    } else {
+      r.C = v.F * v.ph / (2 * PI * v.eta);
+      c.step('Couple nécessaire', 'C = F·p<sub>h</sub> / (2π·η)', `${Q(v.F, 'N')} × ${Q(v.ph, 'm')} / (2π × ${Q(v.eta, '%')})`, Q(r.C, 'N·m'));
+      r.N = 2 * PI * v.v / v.ph;
+      c.step('Vitesse de rotation', 'N = v / p<sub>h</sub>', `${Q(v.v, 'mm/s')} / ${Q(v.ph, 'mm')}`, Q(r.N, 'tr/min'));
+      r.Pu = v.F * v.v; r.Pm = r.C * r.N;
+    }
+    c.step('Puissance sur la vis', 'P = F·v / η', `${Q(r.Pu, 'W')} / ${Q(v.eta, '%')}`, Q(r.Pm, 'W'));
+    if (v.eta < 0.5) c.note('Rendement &lt; 50 % : système en général <b>irréversible</b> (la charge ne peut pas entraîner la vis), mais un frein reste recommandé en cas de vibrations.');
+    else c.note('Rendement élevé : système <b>réversible</b>. Une charge verticale peut entraîner la vis : prévoir un frein moteur.');
+    return r;
+  }
+});
+
+Calc.register({
+  id: 'me-levage', cat: 'meca', title: 'Levage et translation : effort et puissance',
+  keywords: 'levage treuil convoyeur translation plan incline frottement acceleration puissance moteur tambour',
+  desc: 'Effort et puissance pour lever, translater ou monter une charge sur un plan incliné, avec la phase d’accélération.',
+  inputs: [
+    {id: 'mvt', label: 'Type de mouvement', type: 'select', def: 'lev', options: [['lev', 'Levage vertical'], ['tra', 'Translation horizontale'], ['inc', 'Montée sur plan incliné']]},
+    {id: 'm', label: 'Masse déplacée', sym: 'm', dim: 'mass', unit: 'kg', def: 500, gt: 0},
+    {id: 'alpha', label: 'Inclinaison du plan', sym: 'α', dim: 'angle', unit: '°', units: ['°'], def: 15, gt: 0, max: 90, showIf: v => v.mvt === 'inc'},
+    {id: 'mu', label: 'Coefficient de frottement / roulement', sym: 'μ', dim: 'none', unit: '', def: 0.05, min: 0, showIf: v => v.mvt !== 'lev',
+      help: 'Ordre de grandeur : roulement ≈ 0,01 à 0,05 ; glissement acier/acier ≈ 0,1 à 0,2 (selon lubrification).'},
+    {id: 'v', label: 'Vitesse de déplacement', sym: 'v', dim: 'speed', unit: 'm/s', def: 0.5, gt: 0},
+    {id: 'ta', label: 'Temps d’accélération', sym: 't<sub>a</sub>', dim: 'time', unit: 's', def: 1, gt: 0},
+    {id: 'eta', label: 'Rendement de la chaîne cinématique', sym: 'η', dim: 'pct', unit: '%', def: 85, gt: 0, max: 100},
+    {id: 'Dt', label: 'Ø du tambour / pignon / poulie motrice', sym: 'D<sub>t</sub>', dim: 'length', unit: 'mm', def: 200, min: 0, help: '0 = ne pas calculer le couple et la vitesse au tambour.'}
+  ],
+  outputs: [
+    {id: 'Fr', label: 'Effort résistant en régime établi', sym: 'F<sub>r</sub>', dim: 'force', unit: 'N'},
+    {id: 'a', label: 'Accélération', sym: 'a', dim: 'accel', unit: 'm/s²'},
+    {id: 'Fa', label: 'Effort d’accélération', sym: 'm·a', dim: 'force', unit: 'N'},
+    {id: 'Fmax', label: 'Effort maximal (démarrage)', sym: 'F<sub>max</sub>', dim: 'force', unit: 'N'},
+    {id: 'Pr', label: 'Puissance moteur en régime établi', sym: 'P', dim: 'power', unit: 'kW', units: ['W', 'kW', 'ch'], main: true},
+    {id: 'Pd', label: 'Puissance de pointe en fin d’accélération', sym: 'P<sub>max</sub>', dim: 'power', unit: 'kW', units: ['W', 'kW', 'ch']},
+    {id: 'Ct', label: 'Couple au tambour (régime établi)', sym: 'C<sub>t</sub>', dim: 'torque', unit: 'N·m'},
+    {id: 'Cd', label: 'Couple au tambour (démarrage)', sym: 'C<sub>t,max</sub>', dim: 'torque', unit: 'N·m'},
+    {id: 'Nt', label: 'Vitesse de rotation du tambour', sym: 'N<sub>t</sub>', dim: 'rot', unit: 'tr/min'}
+  ],
+  formulas: v => [
+    v.mvt === 'lev' ? 'F<sub>r</sub> = m·g' : v.mvt === 'tra' ? 'F<sub>r</sub> = μ·m·g' : 'F<sub>r</sub> = m·g·(sin α + μ·cos α)',
+    'a = v / t<sub>a</sub>', 'F<sub>max</sub> = F<sub>r</sub> + m·a', 'P = F<sub>r</sub>·v / η', 'P<sub>max</sub> = F<sub>max</sub>·v / η',
+    'C<sub>t</sub> = F·D<sub>t</sub>/2', 'N<sub>t</sub> = v / (π·D<sub>t</sub>)'
+  ],
+  hyp: ['g = 9,81 m/s² ; accélération uniforme.', 'Inertie des pièces tournantes (rotor, réducteur, tambour) <b>négligée</b> : elle peut être importante, surtout avec un grand rapport de réduction.', 'Couples au tambour donnés côté charge (sans rendement) ; le couple moteur se déduit avec le calcul « Réducteur ».', 'Choisir un moteur de puissance normalisée ≥ P et vérifier que son couple de démarrage couvre la phase d’accélération.'],
+  compute(v, c){
+    let Fr;
+    if (v.mvt === 'lev'){ Fr = v.m * G; c.step('Effort résistant (poids)', 'F<sub>r</sub> = m·g', `${Q(v.m, 'kg')} × 9,81 m/s²`, Q(Fr, 'N')); }
+    else if (v.mvt === 'tra'){ Fr = v.mu * v.m * G; c.step('Effort résistant (frottement)', 'F<sub>r</sub> = μ·m·g', `${Fmt.num(v.mu)} × ${Q(v.m, 'kg')} × 9,81 m/s²`, Q(Fr, 'N')); }
+    else { Fr = v.m * G * (sin(v.alpha) + v.mu * cos(v.alpha)); c.step('Effort résistant', 'F<sub>r</sub> = m·g·(sin α + μ·cos α)', `${Q(v.m, 'kg')} × 9,81 × (sin ${Q(v.alpha, '°')} + ${Fmt.num(v.mu)} × cos ${Q(v.alpha, '°')})`, Q(Fr, 'N')); }
+    const a = v.v / v.ta, Fa = v.m * a, Fmax = Fr + Fa;
+    c.step('Accélération', 'a = v / t<sub>a</sub>', `${Q(v.v, 'm/s')} / ${Q(v.ta, 's')}`, Q(a, 'm/s²'));
+    c.step('Effort d’accélération', 'F<sub>a</sub> = m·a', `${Q(v.m, 'kg')} × ${Q(a, 'm/s²')}`, Q(Fa, 'N'));
+    c.step('Effort maximal', 'F<sub>max</sub> = F<sub>r</sub> + F<sub>a</sub>', `${Q(Fr, 'N')} + ${Q(Fa, 'N')}`, Q(Fmax, 'N'));
+    const Pr = Fr * v.v / v.eta, Pd = Fmax * v.v / v.eta;
+    c.step('Puissance en régime établi', 'P = F<sub>r</sub>·v / η', `${Q(Fr, 'N')} × ${Q(v.v, 'm/s')} / ${Q(v.eta, '%')}`, Q(Pr, 'kW'));
+    c.step('Puissance de pointe', 'P<sub>max</sub> = F<sub>max</sub>·v / η', `${Q(Fmax, 'N')} × ${Q(v.v, 'm/s')} / ${Q(v.eta, '%')}`, Q(Pd, 'kW'));
+    const r = {Fr, a, Fa, Fmax, Pr, Pd};
+    if (v.Dt > 0){
+      r.Ct = Fr * v.Dt / 2; r.Cd = Fmax * v.Dt / 2; r.Nt = v.v / (v.Dt / 2);
+      c.step('Couple au tambour', 'C<sub>t</sub> = F<sub>r</sub>·D<sub>t</sub>/2', `${Q(Fr, 'N')} × ${Q(v.Dt, 'm')} / 2`, Q(r.Ct, 'N·m'));
+      c.step('Vitesse du tambour', 'N<sub>t</sub> = v / (π·D<sub>t</sub>)', `${Q(v.v, 'm/s')} / (π × ${Q(v.Dt, 'm')})`, Q(r.Nt, 'tr/min'));
+    }
+    if (v.mvt === 'tra' && v.mu === 0) c.warn('μ = 0 : seul l’effort d’accélération est pris en compte.');
+    return r;
+  }
+});
+
+/* ===================== ÉLECTRICITÉ & MOTEURS ===================== */
+
+Calc.register({
+  id: 'el-ohm', cat: 'elec', title: 'Loi d’Ohm et puissance',
+  keywords: 'ohm tension courant resistance puissance joule u=ri p=ui',
+  desc: 'Récepteur résistif (ou courant continu) : calcule U, I, R et P à partir de deux grandeurs connues.',
+  inputs: [
+    {id: 'mode', label: 'Grandeurs connues', type: 'select', def: 'UR', options: [['UI', 'U et I'], ['UR', 'U et R'], ['IR', 'I et R'], ['PU', 'P et U'], ['PI', 'P et I'], ['PR', 'P et R']]},
+    {id: 'U', label: 'Tension', sym: 'U', dim: 'voltage', unit: 'V', def: 24, gt: 0, showIf: v => v.mode.includes('U')},
+    {id: 'I', label: 'Courant', sym: 'I', dim: 'current', unit: 'A', def: 0.5, gt: 0, showIf: v => v.mode.includes('I')},
+    {id: 'R', label: 'Résistance', sym: 'R', dim: 'resistance', unit: 'Ω', def: 48, gt: 0, showIf: v => v.mode.includes('R')},
+    {id: 'P', label: 'Puissance', sym: 'P', dim: 'power', unit: 'W', units: ['mW', 'W', 'kW'], def: 12, gt: 0, showIf: v => v.mode.includes('P')}
+  ],
+  outputs: [
+    {id: 'U', label: 'Tension', sym: 'U', dim: 'voltage', unit: 'V', main: true, showIf: v => !v.mode.includes('U')},
+    {id: 'I', label: 'Courant', sym: 'I', dim: 'current', unit: 'A', main: true, showIf: v => !v.mode.includes('I')},
+    {id: 'R', label: 'Résistance', sym: 'R', dim: 'resistance', unit: 'Ω', main: true, showIf: v => !v.mode.includes('R')},
+    {id: 'P', label: 'Puissance', sym: 'P', dim: 'power', unit: 'W', units: ['mW', 'W', 'kW'], main: true, showIf: v => !v.mode.includes('P')}
+  ],
+  formulas: ['U = R·I', 'P = U·I = R·I² = U²/R'],
+  hyp: ['Valable en courant continu, ou en alternatif pour un récepteur purement résistif (cos φ = 1, valeurs efficaces).', 'Résistance supposée constante (sans effet de la température).'],
+  compute(v, c){
+    let {U, I, R, P} = v;
+    switch (v.mode){
+      case 'UI': R = U / I; P = U * I;
+        c.step('Résistance', 'R = U / I', `${Q(U, 'V')} / ${Q(I, 'A')}`, Q(R, 'Ω'));
+        c.step('Puissance', 'P = U·I', `${Q(U, 'V')} × ${Q(I, 'A')}`, Q(P, 'W')); break;
+      case 'UR': I = U / R; P = U * U / R;
+        c.step('Courant', 'I = U / R', `${Q(U, 'V')} / ${Q(R, 'Ω')}`, Q(I, 'A'));
+        c.step('Puissance', 'P = U² / R', `(${Q(U, 'V')})² / ${Q(R, 'Ω')}`, Q(P, 'W')); break;
+      case 'IR': U = R * I; P = R * I * I;
+        c.step('Tension', 'U = R·I', `${Q(R, 'Ω')} × ${Q(I, 'A')}`, Q(U, 'V'));
+        c.step('Puissance', 'P = R·I²', `${Q(R, 'Ω')} × (${Q(I, 'A')})²`, Q(P, 'W')); break;
+      case 'PU': I = P / U; R = U * U / P;
+        c.step('Courant', 'I = P / U', `${Q(P, 'W')} / ${Q(U, 'V')}`, Q(I, 'A'));
+        c.step('Résistance', 'R = U² / P', `(${Q(U, 'V')})² / ${Q(P, 'W')}`, Q(R, 'Ω')); break;
+      case 'PI': U = P / I; R = P / (I * I);
+        c.step('Tension', 'U = P / I', `${Q(P, 'W')} / ${Q(I, 'A')}`, Q(U, 'V'));
+        c.step('Résistance', 'R = P / I²', `${Q(P, 'W')} / (${Q(I, 'A')})²`, Q(R, 'Ω')); break;
+      case 'PR': U = sqrt(P * R); I = sqrt(P / R);
+        c.step('Tension', 'U = √(P·R)', `√(${Q(P, 'W')} × ${Q(R, 'Ω')})`, Q(U, 'V'));
+        c.step('Courant', 'I = √(P / R)', `√(${Q(P, 'W')} / ${Q(R, 'Ω')})`, Q(I, 'A')); break;
+    }
+    return {U, I, R, P};
+  }
+});
+
+Calc.register({
+  id: 'el-courant', cat: 'elec', title: 'Courant absorbé par un récepteur',
+  keywords: 'intensite courant puissance monophase triphase continu cos phi apparente reactive',
+  desc: 'Courant en ligne d’un récepteur en continu, monophasé ou triphasé, à partir de sa puissance.',
+  inputs: [
+    {id: 'res', label: 'Réseau', type: 'select', def: 'tri', options: [['dc', 'Courant continu'], ['mono', 'Alternatif monophasé'], ['tri', 'Alternatif triphasé']]},
+    {id: 'P', label: 'Puissance utile (fournie par le récepteur)', sym: 'P<sub>u</sub>', dim: 'power', unit: 'kW', units: ['W', 'kW', 'ch', 'hp'], def: 2.2, gt: 0},
+    {id: 'eta', label: 'Rendement', sym: 'η', dim: 'pct', unit: '%', def: 85, gt: 0, max: 100, help: '100 % pour un récepteur résistif (chauffage) ou si la puissance indiquée est déjà la puissance absorbée.'},
+    {id: 'U', label: 'Tension d’alimentation (entre phases en triphasé)', sym: 'U', dim: 'voltage', unit: 'V', def: 400, gt: 0},
+    {id: 'cos', label: 'Facteur de puissance', sym: 'cos φ', dim: 'none', unit: '', def: 0.82, gt: 0, max: 1, showIf: v => v.res !== 'dc'}
+  ],
+  outputs: [
+    {id: 'Pa', label: 'Puissance absorbée (active)', sym: 'P<sub>a</sub>', dim: 'power', unit: 'kW', units: ['W', 'kW']},
+    {id: 'I', label: 'Courant en ligne', sym: 'I', dim: 'current', unit: 'A', main: true},
+    {id: 'S', label: 'Puissance apparente', sym: 'S', dim: 'apparent', unit: 'kVA', showIf: v => v.res !== 'dc'},
+    {id: 'Qr', label: 'Puissance réactive', sym: 'Q', dim: 'reactive', unit: 'kvar', showIf: v => v.res !== 'dc'}
+  ],
+  formulas: v => ['P<sub>a</sub> = P<sub>u</sub> / η',
+    v.res === 'dc' ? 'I = P<sub>a</sub> / U' : v.res === 'mono' ? 'I = P<sub>a</sub> / (U·cos φ)' : 'I = P<sub>a</sub> / (√3·U·cos φ)',
+    ...(v.res === 'dc' ? [] : [v.res === 'mono' ? 'S = U·I' : 'S = √3·U·I', 'Q = S·sin φ'])],
+  hyp: ['Régime sinusoïdal équilibré (en triphasé) ; valeurs efficaces.', 'Pour un moteur, P<sub>u</sub> est la puissance mécanique de la plaque signalétique.'],
+  compute(v, c){
+    const Pa = v.P / v.eta;
+    c.step('Puissance absorbée', 'P<sub>a</sub> = P<sub>u</sub> / η', `${Q(v.P, 'kW')} / ${Q(v.eta, '%')}`, Q(Pa, 'kW'));
+    let I, S, Qr;
+    if (v.res === 'dc'){ I = Pa / v.U; c.step('Courant', 'I = P<sub>a</sub> / U', `${Q(Pa, 'W')} / ${Q(v.U, 'V')}`, Q(I, 'A')); return {Pa, I}; }
+    const sinf = sqrt(1 - v.cos ** 2);
+    if (v.res === 'mono'){
+      I = Pa / (v.U * v.cos); S = v.U * I;
+      c.step('Courant', 'I = P<sub>a</sub> / (U·cos φ)', `${Q(Pa, 'W')} / (${Q(v.U, 'V')} × ${Fmt.num(v.cos)})`, Q(I, 'A'));
+      c.step('Puissance apparente', 'S = U·I', `${Q(v.U, 'V')} × ${Q(I, 'A')}`, Q(S, 'kVA'));
+    } else {
+      I = Pa / (sqrt(3) * v.U * v.cos); S = sqrt(3) * v.U * I;
+      c.step('Courant', 'I = P<sub>a</sub> / (√3·U·cos φ)', `${Q(Pa, 'W')} / (1,732 × ${Q(v.U, 'V')} × ${Fmt.num(v.cos)})`, Q(I, 'A'));
+      c.step('Puissance apparente', 'S = √3·U·I', `1,732 × ${Q(v.U, 'V')} × ${Q(I, 'A')}`, Q(S, 'kVA'));
+    }
+    Qr = S * sinf;
+    c.step('Puissance réactive', 'Q = S·sin φ', `${Q(S, 'kVA')} × ${Fmt.num(sinf)}`, Q(Qr, 'kvar'));
+    return {Pa, I, S, Qr};
+  }
+});
+
+Calc.register({
+  id: 'el-moteur', cat: 'elec', title: 'Moteur asynchrone triphasé',
+  keywords: 'moteur asynchrone induction plaque signaletique courant nominal glissement couple demarrage etoile triangle relais thermique',
+  desc: 'À partir de la plaque signalétique : courant nominal, couple, glissement, courant et couple de démarrage.',
+  inputs: [
+    {id: 'Pn', label: 'Puissance utile nominale', sym: 'P<sub>n</sub>', dim: 'power', unit: 'kW', units: ['W', 'kW', 'ch', 'hp'], def: 5.5, gt: 0},
+    {id: 'U', label: 'Tension réseau entre phases', sym: 'U', dim: 'voltage', unit: 'V', def: 400, gt: 0},
+    {id: 'cos', label: 'Facteur de puissance', sym: 'cos φ', dim: 'none', unit: '', def: 0.84, gt: 0, max: 1},
+    {id: 'eta', label: 'Rendement', sym: 'η', dim: 'pct', unit: '%', def: 88, gt: 0, max: 100},
+    {id: 'f', label: 'Fréquence du réseau', sym: 'f', dim: 'freq', unit: 'Hz', units: ['Hz'], def: 50, gt: 0},
+    {id: 'poles', label: 'Nombre de pôles', type: 'select', def: '4', options: [['2', '2 pôles (p = 1 paire)'], ['4', '4 pôles (p = 2)'], ['6', '6 pôles (p = 3)'], ['8', '8 pôles (p = 4)']]},
+    {id: 'N', label: 'Vitesse nominale (plaque)', sym: 'N<sub>n</sub>', dim: 'rot', unit: 'tr/min', def: 1455, gt: 0},
+    {id: 'kI', label: 'Rapport courant de démarrage / nominal', sym: 'I<sub>d</sub>/I<sub>n</sub>', dim: 'none', unit: '', def: 7, gt: 0, help: 'Catalogue fabricant ; usuel 5 à 8.'},
+    {id: 'kC', label: 'Rapport couple de démarrage / nominal', sym: 'C<sub>d</sub>/C<sub>n</sub>', dim: 'none', unit: '', def: 2.2, gt: 0, help: 'Catalogue fabricant ; usuel 1,8 à 3.'}
+  ],
+  outputs: [
+    {id: 'In', label: 'Courant nominal', sym: 'I<sub>n</sub>', dim: 'current', unit: 'A', main: true},
+    {id: 'Cn', label: 'Couple nominal', sym: 'C<sub>n</sub>', dim: 'torque', unit: 'N·m', main: true},
+    {id: 'Pa', label: 'Puissance absorbée', sym: 'P<sub>a</sub>', dim: 'power', unit: 'kW', units: ['W', 'kW']},
+    {id: 'S', label: 'Puissance apparente', sym: 'S', dim: 'apparent', unit: 'kVA'},
+    {id: 'Qr', label: 'Puissance réactive', sym: 'Q', dim: 'reactive', unit: 'kvar'},
+    {id: 'Ns', label: 'Vitesse de synchronisme', sym: 'N<sub>s</sub>', dim: 'rot', unit: 'tr/min'},
+    {id: 'g', label: 'Glissement', sym: 'g', dim: 'pct', unit: '%'},
+    {id: 'Id', label: 'Courant de démarrage direct', sym: 'I<sub>d</sub>', dim: 'current', unit: 'A'},
+    {id: 'Cd', label: 'Couple de démarrage direct', sym: 'C<sub>d</sub>', dim: 'torque', unit: 'N·m'},
+    {id: 'IdY', label: 'Courant de démarrage en étoile-triangle', sym: 'I<sub>d</sub>/3', dim: 'current', unit: 'A'},
+    {id: 'CdY', label: 'Couple de démarrage en étoile-triangle', sym: 'C<sub>d</sub>/3', dim: 'torque', unit: 'N·m'}
+  ],
+  formulas: ['P<sub>a</sub> = P<sub>n</sub> / η', 'I<sub>n</sub> = P<sub>a</sub> / (√3·U·cos φ)', 'N<sub>s</sub> = 60·f / p', 'g = (N<sub>s</sub> − N<sub>n</sub>) / N<sub>s</sub>', 'C<sub>n</sub> = P<sub>n</sub> / ω<sub>n</sub>', 'Étoile-triangle : I<sub>d</sub>/3 et C<sub>d</sub>/3'],
+  hyp: [
+    'p = nombre de <b>paires</b> de pôles. Valeurs nominales issues de la plaque signalétique.',
+    'Relais thermique (ou disjoncteur-moteur) : réglé sur le courant nominal plaque I<sub>n</sub>.',
+    'Étoile-triangle : uniquement pour un moteur dont la tension <b>triangle</b> est égale à la tension du réseau (ex. plaque 400/690 V sur réseau 400 V). Le couple réduit doit rester supérieur au couple résistant de la machine.',
+    'Couplage : plaque 230/400 V sur réseau 400 V → <b>étoile</b> ; plaque 400/690 V sur réseau 400 V → <b>triangle</b>.'
+  ],
+  compute(v, c){
+    const Pa = v.Pn / v.eta;
+    c.step('Puissance absorbée', 'P<sub>a</sub> = P<sub>n</sub> / η', `${Q(v.Pn, 'kW')} / ${Q(v.eta, '%')}`, Q(Pa, 'kW'));
+    const In = Pa / (sqrt(3) * v.U * v.cos), S = sqrt(3) * v.U * In, Qr = S * sqrt(1 - v.cos ** 2);
+    c.step('Courant nominal', 'I<sub>n</sub> = P<sub>a</sub> / (√3·U·cos φ)', `${Q(Pa, 'W')} / (1,732 × ${Q(v.U, 'V')} × ${Fmt.num(v.cos)})`, Q(In, 'A'));
+    const p = +v.poles / 2, ws = 2 * PI * v.f / p;
+    c.step('Vitesse de synchronisme', 'N<sub>s</sub> = 60·f / p', `60 × ${Q(v.f, 'Hz')} / ${p}`, Q(ws, 'tr/min'));
+    if (v.N >= ws) return c.err('La vitesse nominale doit être inférieure à la vitesse de synchronisme : vérifier le nombre de pôles.');
+    const g = (ws - v.N) / ws;
+    c.step('Glissement', 'g = (N<sub>s</sub> − N<sub>n</sub>) / N<sub>s</sub>', `(${Q(ws, 'tr/min')} − ${Q(v.N, 'tr/min')}) / ${Q(ws, 'tr/min')}`, Q(g, '%'));
+    const Cn = v.Pn / v.N;
+    c.step('Couple nominal', 'C<sub>n</sub> = P<sub>n</sub> / ω<sub>n</sub>', `${Q(v.Pn, 'W')} / ${Q(v.N, 'rad/s')}`, Q(Cn, 'N·m'));
+    const Id = v.kI * In, Cd = v.kC * Cn;
+    c.step('Courant de démarrage direct', 'I<sub>d</sub> = k<sub>I</sub>·I<sub>n</sub>', `${Fmt.num(v.kI)} × ${Q(In, 'A')}`, Q(Id, 'A'));
+    c.step('Couple de démarrage direct', 'C<sub>d</sub> = k<sub>C</sub>·C<sub>n</sub>', `${Fmt.num(v.kC)} × ${Q(Cn, 'N·m')}`, Q(Cd, 'N·m'));
+    c.step('Démarrage étoile-triangle', 'I<sub>dY</sub> = I<sub>d</sub>/3 ; C<sub>dY</sub> = C<sub>d</sub>/3', null, `${Q(Id / 3, 'A')} ; ${Q(Cd / 3, 'N·m')}`);
+    if (g > 0.1) c.warn('Glissement supérieur à 10 % : inhabituel pour un moteur standard, vérifier la vitesse nominale.');
+    c.note(`Réglage du relais thermique : ≈ ${Q(In, 'A')}.`);
+    return {In, Cn, Pa, S, Qr, Ns: ws, g, Id, Cd, IdY: Id / 3, CdY: Cd / 3};
+  }
+});
+
+/* Câbles : données de référence */
+const RHO_SERVICE = {cu: 0.0225e-6, al: 0.036e-6};   // résistivité en service [Ω·m] (= 1,25 × valeur à 20 °C)
+const LAMBDA_X = 0.08e-3;                              // réactance linéique [Ω/m]
+const SECTIONS = [0.75, 1, 1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240];
+/** Courants admissibles Iz [A] — IEC 60364-5-52, tableau B.52.4, méthode C (câble fixé sur paroi),
+    âme cuivre, isolant PVC (70 °C), température ambiante 30 °C ; clé = nombre de conducteurs chargés */
+const IZ_C_PVC_CU = {
+  2: {1.5: 19.5, 2.5: 27, 4: 36, 6: 46, 10: 63, 16: 85, 25: 112, 35: 138, 50: 168, 70: 213, 95: 258, 120: 299, 150: 344, 185: 392, 240: 461},
+  3: {1.5: 17.5, 2.5: 24, 4: 32, 6: 41, 10: 57, 16: 76, 25: 96, 35: 119, 50: 144, 70: 184, 95: 223, 120: 259, 150: 299, 185: 341, 240: 403}
+};
+Calc.register({
+  id: 'el-cable', cat: 'elec', title: 'Câble : chute de tension et section',
+  keywords: 'cable section chute de tension longueur conducteur cuivre aluminium iz courant admissible',
+  desc: 'Chute de tension d’une ligne, section minimale pour respecter une chute admissible, courant admissible indicatif.',
+  inputs: [
+    {id: 'res', label: 'Type de circuit', type: 'select', def: 'tri', options: [['dc', 'Courant continu (ex. commande 24 V)'], ['mono', 'Alternatif monophasé'], ['tri', 'Alternatif triphasé']]},
+    {id: 'U', label: 'Tension nominale (entre phases en triphasé)', sym: 'U', dim: 'voltage', unit: 'V', def: 400, gt: 0},
+    {id: 'I', label: 'Courant d’emploi', sym: 'I<sub>B</sub>', dim: 'current', unit: 'A', def: 16, gt: 0},
+    {id: 'L', label: 'Longueur de la ligne (aller simple)', sym: 'L', dim: 'length', unit: 'm', def: 50, gt: 0},
+    {id: 'mat', label: 'Matériau de l’âme', type: 'select', def: 'cu', options: [['cu', 'Cuivre'], ['al', 'Aluminium']]},
+    {id: 'S', label: 'Section envisagée', type: 'select', def: '2.5', options: SECTIONS.map(s => [String(s), String(s).replace('.', ',') + ' mm²'])},
+    {id: 'cos', label: 'Facteur de puissance de la charge', sym: 'cos φ', dim: 'none', unit: '', def: 0.85, gt: 0, max: 1, showIf: v => v.res !== 'dc'},
+    {id: 'dUmax', label: 'Chute de tension maximale admise', sym: 'ΔU<sub>max</sub>', dim: 'pct', unit: '%', def: 5, gt: 0, max: 100,
+      help: 'IEC 60364-5-52 (annexe G), installation alimentée par le réseau public BT : 3 % éclairage, 5 % autres usages. Vérifier les exigences du RGIE.'}
+  ],
+  outputs: [
+    {id: 'R', label: 'Résistance d’un conducteur', sym: 'R', dim: 'resistance', unit: 'Ω'},
+    {id: 'dU', label: 'Chute de tension', sym: 'ΔU', dim: 'voltage', unit: 'V'},
+    {id: 'dUp', label: 'Chute de tension relative', sym: 'ΔU/U', dim: 'pct', unit: '%', main: true},
+    {id: 'okdU', label: 'Chute de tension', type: 'text'},
+    {id: 'Uarr', label: 'Tension à l’arrivée', sym: 'U − ΔU', dim: 'voltage', unit: 'V'},
+    {id: 'Pj', label: 'Pertes Joule dans la ligne', sym: 'P<sub>J</sub>', dim: 'power', unit: 'W', units: ['W', 'kW']},
+    {id: 'Smin', label: 'Section minimale pour ΔU<sub>max</sub>', type: 'text', main: true},
+    {id: 'Iz', label: 'Courant admissible indicatif I<sub>z</sub>', type: 'text'}
+  ],
+  formulas: v => [
+    'R = ρ·L / S ;  X = λ·L',
+    v.res === 'dc' ? 'ΔU = 2·R·I<sub>B</sub>' : v.res === 'mono' ? 'ΔU = 2·(R·cos φ + X·sin φ)·I<sub>B</sub>' : 'ΔU = √3·(R·cos φ + X·sin φ)·I<sub>B</sub>',
+    'ΔU % = 100·ΔU / U',
+    v.res === 'tri' ? 'P<sub>J</sub> = 3·R·I<sub>B</sub>²' : 'P<sub>J</sub> = 2·R·I<sub>B</sub>²'
+  ],
+  hyp: [
+    'Résistivité en service : ρ = 0,0225 Ω·mm²/m (cuivre) ; 0,036 Ω·mm²/m (aluminium), soit 1,25 × la valeur à 20 °C.',
+    'Réactance linéique λ = 0,08 mΩ/m (câbles multiconducteurs) ; négligée en continu.',
+    'I<sub>z</sub> indicatif : IEC 60364-5-52, méthode C (câble fixé sur paroi), cuivre, isolant PVC, 30 °C, <b>sans facteurs de correction</b> (groupement, température, mode de pose).',
+    'Ce calcul ne remplace pas la vérification complète : protection contre les surcharges (I<sub>B</sub> ≤ I<sub>n</sub> ≤ I<sub>z</sub>), courts-circuits, contacts indirects, prescriptions du RGIE.'
+  ],
+  compute(v, c){
+    const rho = RHO_SERVICE[v.mat], S = +v.S * 1e-6;
+    const cosf = v.res === 'dc' ? 1 : v.cos, sinf = v.res === 'dc' ? 0 : sqrt(1 - cosf ** 2);
+    const k = v.res === 'tri' ? sqrt(3) : 2;
+    const du = s => k * (rho * v.L / s * cosf + LAMBDA_X * v.L * sinf) * v.I;
+    const R = rho * v.L / S, X = LAMBDA_X * v.L;
+    c.step('Résistance d’un conducteur', 'R = ρ·L / S', `${Fmt.num(rho * 1e6)} Ω·mm²/m × ${Q(v.L, 'm')} / ${String(v.S).replace('.', ',')} mm²`, Q(R, 'Ω'));
+    if (v.res !== 'dc') c.step('Réactance d’un conducteur', 'X = λ·L', `0,08 mΩ/m × ${Q(v.L, 'm')}`, Q(X, 'Ω'));
+    const dU = du(S), dUp = dU / v.U;
+    if (v.res === 'dc') c.step('Chute de tension (aller + retour)', 'ΔU = 2·R·I<sub>B</sub>', `2 × ${Q(R, 'Ω')} × ${Q(v.I, 'A')}`, Q(dU, 'V'));
+    else c.step('Chute de tension', (v.res === 'tri' ? '√3' : '2') + '·(R·cos φ + X·sin φ)·I<sub>B</sub>',
+      `${v.res === 'tri' ? '1,732' : '2'} × (${Q(R, 'Ω')} × ${Fmt.num(cosf)} + ${Q(X, 'Ω')} × ${Fmt.num(sinf)}) × ${Q(v.I, 'A')}`, Q(dU, 'V'));
+    c.step('Chute de tension relative', 'ΔU % = 100·ΔU / U', `100 × ${Q(dU, 'V')} / ${Q(v.U, 'V')}`, Q(dUp, '%'));
+    const Pj = (v.res === 'tri' ? 3 : 2) * R * v.I ** 2;
+    c.step('Pertes Joule', v.res === 'tri' ? 'P<sub>J</sub> = 3·R·I<sub>B</sub>²' : 'P<sub>J</sub> = 2·R·I<sub>B</sub>²', `${v.res === 'tri' ? 3 : 2} × ${Q(R, 'Ω')} × (${Q(v.I, 'A')})²`, Q(Pj, 'W'));
+    const sMin = SECTIONS.find(s => du(s * 1e-6) / v.U <= v.dUmax);
+    if (sMin) c.step('Section minimale (chute de tension)', 'plus petite section normalisée telle que ΔU % ≤ ΔU<sub>max</sub>', null, String(sMin).replace('.', ',') + ' mm²');
+    const okdU = dUp <= v.dUmax;
+    // courant admissible indicatif
+    let Iz = {text: v.mat === 'cu' ? 'non tabulé pour cette section' : 'non tabulé (aluminium)', status: 'info'};
+    const nCh = v.res === 'tri' ? 3 : 2, tab = IZ_C_PVC_CU[nCh];
+    if (v.mat === 'cu' && tab[+v.S] != null){
+      const iz = tab[+v.S], ok = v.I <= iz;
+      Iz = {text: `${Fmt.num(iz)} A ${ok ? '≥ I<sub>B</sub>' : '&lt; I<sub>B</sub> !'}`, status: ok ? 'ok' : 'bad'};
+      if (!ok) c.warn(`Courant d’emploi supérieur au courant admissible indicatif (${Fmt.num(iz)} A pour ${String(v.S).replace('.', ',')} mm², ${nCh} conducteurs chargés) : augmenter la section.`);
+    }
+    if (!sMin) c.warn('Même 240 mm² ne suffit pas : réduire la longueur, augmenter la tension ou mettre des conducteurs en parallèle.');
+    if (v.res === 'dc' && v.U <= 48) c.note('En très basse tension (24 V), la chute de tension est souvent le critère dimensionnant : 5 % de 24 V = 1,2 V seulement.');
+    return {R, dU, dUp, okdU: okdU ? {text: '≤ ' + Q(v.dUmax, '%') + ' : conforme', status: 'ok'} : {text: '> ' + Q(v.dUmax, '%') + ' : trop élevée', status: 'bad'},
+      Uarr: v.U - dU, Pj, Smin: {text: sMin ? String(sMin).replace('.', ',') + ' mm²' : '> 240 mm²'}, Iz};
+  }
+});
+
+/* ============================== OUTILS ============================== */
+
+Calc.register({
+  id: 'ou-conv', cat: 'outils', title: 'Convertisseur d’unités',
+  keywords: 'conversion unite bar psi pa kw ch cv nm debit pouce',
+  desc: 'Conversion instantanée entre les unités usuelles d’une même grandeur.',
+  /** Interface spécifique (n'utilise pas le formulaire générique) */
+  mount(box, st){
+    const s = st.conv = st.conv || {dim: 'pressure', v: '1', u: 'bar'};
+    const dims = Object.entries(Units.dims).filter(([k]) => !['pct', 'none'].includes(k));
+    const selDim = h('select', {class: 'field', id: 'conv-dim'}, dims.map(([k, d]) => h('option', {value: k}, d.n)));
+    const inp = h('input', {class: 'field', id: 'conv-val', type: 'text', inputmode: 'decimal', autocomplete: 'off', value: s.v});
+    const selU = h('select', {class: 'field', id: 'conv-unit', 'aria-label': 'Unité'});
+    const table = h('table', {class: 'conv'});
+    const units = () => Object.keys(Units.dims[s.dim].u);
+    const fillUnits = () => {
+      selU.replaceChildren(...units().map(u => h('option', {value: u}, u)));
+      if (!units().includes(s.u)) s.u = units()[0];
+      selU.value = s.u;
+    };
+    const render = () => {
+      const n = parseNum(s.v), ok = isFinite(n);
+      inp.style.borderColor = ok ? '' : 'var(--bad)';
+      table.replaceChildren(...units().map(u => h('tr', {}, h('td', {}, ok ? Fmt.num(Units.fromSI(Units.toSI(n, s.u), u), 6) : '—'), h('td', {}, u))));
+      Store.saveSoon();
+    };
+    if (!Units.dims[s.dim]) s.dim = 'pressure';
+    selDim.value = s.dim; fillUnits();
+    selDim.onchange = () => { s.dim = selDim.value; fillUnits(); render(); };
+    selU.onchange = () => { s.u = selU.value; render(); };
+    inp.oninput = () => { s.v = inp.value; render(); };
+    box.append(h('div', {class: 'calc-grid'},
+      h('div', {class: 'panel'}, h('h3', {}, 'Valeur à convertir'),
+        h('div', {class: 'in-row'}, h('label', {class: 'in-label', for: 'conv-dim'}, 'Grandeur'), h('div', {class: 'in-ctrl'}, selDim)),
+        h('div', {class: 'in-row'}, h('label', {class: 'in-label', for: 'conv-val'}, 'Valeur'), h('div', {class: 'in-ctrl'}, inp, selU)),
+        h('p', {class: 'muted', style: 'font-size:13px;margin:10px 0 0'}, '1 ch (cheval-vapeur métrique) = 735,5 W ; 1 hp = 745,7 W ; 1 kgf = 9,806 65 N ; « NL » = litre d’air ramené à la pression atmosphérique.')),
+      h('div', {class: 'panel'}, h('h3', {}, 'Équivalences'), table)));
+    render();
+  }
+});
+
+/* =====================================================================
+   8. MODULES FUTURS (emplacements réservés)
+   ===================================================================== */
+function futureModule(id, label, icon, step, intro, features){
+  return {
+    id, label, icon, step,
+    mount(el){
+      el.append(h('div', {class: 'panel placeholder'},
+        h('div', {class: 'ph-ic', html: ICONS[icon]}),
+        h('h2', {}, label),
+        h('p', {class: 'muted'}, `Module prévu à l'étape ${step}. ${intro}`),
+        h('ul', {}, features.map(f => h('li', {}, f)))));
+    }
+  };
+}
+
+/* =====================================================================
+   9. DÉMARRAGE
+   ===================================================================== */
+App.register(Home);
+App.register(Calc);
+App.register(futureModule('schemas', 'Schémas', 'schema', 2, 'Éditeur de schémas électriques et électroniques.', [
+  'Bibliothèque de symboles IEC 60617 (sectionneur, disjoncteur, fusible, contacteur, relais, BP, voyant, moteur, transformateur, temporisateur…)',
+  'Placement par glisser-déposer sur grille, rotation, câblage borne à borne',
+  'Repérage automatique IEC 81346 (-Q1, -KM1, -F1, -S1…) et numérotation des bornes',
+  'Export / import JSON (dans le même fichier projet) et impression / PDF du folio']));
+App.register(futureModule('simulation', 'Simulation', 'sim', 3, 'Moteur de simulation du schéma dessiné.', [
+  'Mise sous tension, propagation du potentiel, état des bobines et des contacts',
+  'Visualisation du courant dans les conducteurs',
+  'Mesures de tension et de courant (multimètre virtuel)']));
+App.register(futureModule('pannes', 'Pannes', 'fault', 4, 'Injection de défauts pour l’entraînement au diagnostic.', [
+  'Fil coupé, contact collé ou ne se fermant plus, bobine HS, fusible fondu',
+  'Court-circuit, défaut d’isolement, perte de phase',
+  'Mode « exercice » : panne cachée, symptôme affiché, mesures au multimètre, correction']));
+App.init();
+
+/* =====================================================================
+   10. INSTALLATION (PWA) ET FONCTIONNEMENT HORS LIGNE
+   Actif uniquement quand la page est servie en https (GitHub Pages).
+   ===================================================================== */
+if (/^https?:$/.test(location.protocol)){
+  if ('serviceWorker' in navigator)
+    navigator.serviceWorker.register('sw.js').catch(e => console.warn('Service worker non enregistré :', e));
+  let installEvt = null;
+  const btnInstall = document.getElementById('btn-install');
+  document.getElementById('ic-install').innerHTML = ICONS.save;
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; btnInstall.hidden = false; });
+  btnInstall.onclick = async () => {
+    if (!installEvt) return;
+    installEvt.prompt();
+    await installEvt.userChoice;
+    installEvt = null; btnInstall.hidden = true;
+  };
+  window.addEventListener('appinstalled', () => { btnInstall.hidden = true; App.toast('Application installée : retrouvez-la sur le bureau ou dans le menu Démarrer.', 'ok'); });
+}
+</script>
+</body>
+</html>
